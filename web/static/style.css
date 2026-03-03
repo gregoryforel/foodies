@@ -1,0 +1,316 @@
+/* Recipe Platform — minimal, data-first CSS */
+
+:root {
+    --color-bg: #fafafa;
+    --color-surface: #ffffff;
+    --color-text: #1a1a1a;
+    --color-text-muted: #666;
+    --color-border: #e0e0e0;
+    --color-primary: #2d5016;
+    --color-primary-light: #e8f5e9;
+    --color-accent: #ff6b35;
+    --color-allergen: #d32f2f;
+    --color-allergen-bg: #ffebee;
+    --color-diet: #1565c0;
+    --color-diet-bg: #e3f2fd;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+}
+
+/* Navbar */
+.navbar {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    padding: 1rem 0;
+}
+.navbar .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.logo {
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--color-primary);
+    text-decoration: none;
+}
+.nav-links a {
+    color: var(--color-text);
+    text-decoration: none;
+    margin-left: 1.5rem;
+    font-weight: 500;
+}
+.nav-links a:hover { color: var(--color-primary); }
+
+/* Footer */
+.footer {
+    border-top: 1px solid var(--color-border);
+    padding: 2rem 0;
+    margin-top: 3rem;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+}
+
+/* Hero */
+.hero {
+    text-align: center;
+    padding: 3rem 0 2rem;
+}
+.hero h1 {
+    font-size: 2rem;
+    color: var(--color-primary);
+    margin-bottom: 0.5rem;
+}
+.hero p {
+    color: var(--color-text-muted);
+    font-size: 1.1rem;
+}
+
+/* Search */
+.search-bar {
+    margin: 1.5rem 0;
+}
+.search-bar input[type="search"] {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.search-bar input[type="search"]:focus {
+    border-color: var(--color-primary);
+}
+
+/* Recipe Grid */
+.recipe-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+/* Recipe Card */
+.recipe-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.2s;
+}
+.recipe-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.recipe-card a {
+    text-decoration: none;
+    color: var(--color-text);
+}
+.recipe-card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+    color: var(--color-primary);
+}
+.recipe-card .description {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+}
+.recipe-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.5rem;
+}
+
+/* Badges */
+.badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin-top: 0.5rem;
+}
+.badge {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 500;
+}
+.badge-diet {
+    background: var(--color-diet-bg);
+    color: var(--color-diet);
+}
+.badge-allergen {
+    background: var(--color-allergen-bg);
+    color: var(--color-allergen);
+}
+.badge-sub {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+}
+.badge-sm { font-size: 0.65rem; }
+
+/* Recipe Detail */
+.recipe-detail header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+}
+.recipe-detail h1 {
+    font-size: 1.75rem;
+    color: var(--color-primary);
+    margin-bottom: 0.5rem;
+}
+.recipe-detail > .description {
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+}
+
+/* Unit Toggle */
+.unit-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+.unit-toggle label {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.unit-toggle button {
+    padding: 0.375rem 0.875rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+.unit-toggle button.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
+/* Grocery List */
+.grocery-list ul {
+    list-style: none;
+}
+.grocery-list li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.ingredient-name {
+    font-weight: 500;
+}
+
+/* Steps */
+.steps ol {
+    list-style: none;
+    counter-reset: step;
+}
+.step {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+}
+.step-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+.step-number {
+    font-weight: 700;
+    color: var(--color-primary);
+}
+.step-time {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+.step-time span { margin-left: 0.5rem; }
+.step-components {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.component {
+    background: var(--color-primary-light);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+.instruction {
+    margin-top: 0.5rem;
+    line-height: 1.7;
+}
+
+/* Nutrition */
+.nutrition {
+    margin-top: 2rem;
+    padding: 1.25rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+}
+.nutrition h2 {
+    margin-bottom: 1rem;
+}
+.nutrition-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.75rem;
+}
+.nutrient {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.375rem 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.9rem;
+}
+
+.no-results {
+    text-align: center;
+    padding: 3rem 0;
+    color: var(--color-text-muted);
+}
+
+/* Section spacing */
+.featured, .grocery-list, .steps, .nutrition {
+    margin-top: 2rem;
+}
+.featured h2, .grocery-list h2, .steps h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    color: var(--color-primary);
+}
+
+main.container {
+    padding-top: 1rem;
+    padding-bottom: 2rem;
+    min-height: 60vh;
+}

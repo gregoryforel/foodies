@@ -1,0 +1,19 @@
+package templates
+
+templ GroceryListStandalone(items []GroceryItemData, unitSystem string) {
+	@Layout("Grocery List") {
+		<h1>Grocery List</h1>
+		<ul class="grocery-list-standalone">
+			for _, item := range items {
+				<li>
+					if unitSystem == "us" && item.UnitUS != "" {
+						{ formatQuantity(item.QuantityUS) } { item.UnitUS }
+					} else {
+						{ formatQuantity(item.TotalQuantity) } { item.Unit }
+					}
+					<span class="ingredient-name">{ item.Name }</span>
+				</li>
+			}
+		</ul>
+	}
+}

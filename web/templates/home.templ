@@ -1,0 +1,22 @@
+package templates
+
+type HomeData struct {
+	Recipes []RecipeCardData
+}
+
+templ Home(data HomeData) {
+	@Layout("Home") {
+		<section class="hero">
+			<h1>Recipe Platform</h1>
+			<p>Data-first recipes. No blog intros, no scrolling. Just recipes.</p>
+		</section>
+		<section class="featured">
+			<h2>Featured Recipes</h2>
+			<div class="recipe-grid">
+				for _, r := range data.Recipes {
+					@RecipeCard(r)
+				}
+			</div>
+		</section>
+	}
+}

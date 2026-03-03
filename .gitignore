@@ -1,0 +1,41 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/tmp/
+
+# Go
+/vendor/
+
+# Environment
+.env
+*.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+# Note: generated templ files (*_templ.go) are committed for easier builds.
+# Regenerate with: make templ
+# Note: sqlc generated files would go in /internal/dbgen/ — regenerate with: make sqlc
+
+# Docker
+docker-compose.override.yml
+
+# Air (hot reload)
+/tmp/
+
+# Test coverage
+coverage.out
+coverage.html

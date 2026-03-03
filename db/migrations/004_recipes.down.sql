@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS recipe_step_components CASCADE;
+DROP TABLE IF EXISTS recipe_steps CASCADE;
+DROP TABLE IF EXISTS recipes CASCADE;

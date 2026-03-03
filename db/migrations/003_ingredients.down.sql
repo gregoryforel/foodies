@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS ingredient_diet_flags CASCADE;
+DROP TABLE IF EXISTS diet_flags CASCADE;
+DROP TABLE IF EXISTS ingredient_allergens CASCADE;
+DROP TABLE IF EXISTS allergens CASCADE;
+DROP TABLE IF EXISTS ingredient_nutrients CASCADE;
+DROP TABLE IF EXISTS ingredient_densities CASCADE;
+DROP TABLE IF EXISTS ingredients CASCADE;
+DROP TABLE IF EXISTS nutrients CASCADE;
+DROP TABLE IF EXISTS nutrient_categories CASCADE;

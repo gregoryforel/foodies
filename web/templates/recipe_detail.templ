@@ -1,0 +1,211 @@
+package templates
+
+import "fmt"
+
+type StepComponentData struct {
+	Name            string
+	Quantity        float64
+	QuantityUS      float64
+	Unit            string
+	UnitUS          string
+	Optional        bool
+	PreparationNote string
+	IsSubRecipe     bool
+}
+
+type StepData struct {
+	Position       int
+	Instruction    string
+	ActiveSeconds  int
+	PassiveSeconds int
+	Components     []StepComponentData
+}
+
+type GroceryItemData struct {
+	Name          string
+	TotalQuantity float64
+	QuantityUS    float64
+	Unit          string
+	UnitUS        string
+	Allergens     []string
+}
+
+type NutritionData struct {
+	Calories      float64
+	ProteinG      float64
+	FatG          float64
+	SaturatedG    float64
+	CarbsG        float64
+	FiberG        float64
+	SugarG        float64
+	SodiumMg      float64
+	CholesterolMg float64
+}
+
+type RecipeDetailData struct {
+	Title              string
+	Slug               string
+	Description        string
+	Servings           int
+	TotalActiveMinutes int
+	TotalPassiveMinutes int
+	Steps              []StepData
+	GroceryList        []GroceryItemData
+	Nutrition          NutritionData
+	DietFlags          []string
+	Allergens          []string
+	UnitSystem         string
+}
+
+func formatTime(seconds int) string {
+	if seconds < 60 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	m := seconds / 60
+	s := seconds % 60
+	if s == 0 {
+		return fmt.Sprintf("%dm", m)
+	}
+	return fmt.Sprintf("%dm %ds", m, s)
+}
+
+func formatQuantity(q float64) string {
+	if q == float64(int(q)) {
+		return fmt.Sprintf("%d", int(q))
+	}
+	return fmt.Sprintf("%.1f", q)
+}
+
+templ RecipeDetail(data RecipeDetailData) {
+	@Layout(data.Title) {
+		<article class="recipe-detail" x-data={ fmt.Sprintf(`{ unitSystem: '%s' }`, data.UnitSystem) }>
+			<header>
+				<h1>{ data.Title }</h1>
+				if data.Description != "" {
+					<p class="description">{ data.Description }</p>
+				}
+				<div class="recipe-meta">
+					<span>{ fmt.Sprintf("%d servings", data.Servings) }</span>
+					<span>{ fmt.Sprintf("%dm active", data.TotalActiveMinutes) }</span>
+					if data.TotalPassiveMinutes > 0 {
+						<span>{ fmt.Sprintf("%dm passive", data.TotalPassiveMinutes) }</span>
+					}
+				</div>
+				if len(data.DietFlags) > 0 {
+					<div class="badges diet-badges">
+						for _, flag := range data.DietFlags {
+							<span class="badge badge-diet">{ flag }</span>
+						}
+					</div>
+				}
+				if len(data.Allergens) > 0 {
+					<div class="badges allergen-badges">
+						<strong>Contains:</strong>
+						for _, allergen := range data.Allergens {
+							<span class="badge badge-allergen">{ allergen }</span>
+						}
+					</div>
+				}
+			</header>
+
+			<div class="unit-toggle">
+				<label>Units:</label>
+				<button
+					@click="unitSystem = 'metric'"
+					:class="unitSystem === 'metric' ? 'active' : ''"
+				>Metric</button>
+				<button
+					@click="unitSystem = 'us'"
+					:class="unitSystem === 'us' ? 'active' : ''"
+				>US</button>
+			</div>
+
+			<section class="grocery-list">
+				<h2>Ingredients</h2>
+				<ul>
+					for _, item := range data.GroceryList {
+						<li>
+							<span x-show="unitSystem === 'metric'">
+								{ formatQuantity(item.TotalQuantity) } { item.Unit }
+							</span>
+							<span x-show="unitSystem === 'us'" style="display: none">
+								{ formatQuantity(item.QuantityUS) } { item.UnitUS }
+							</span>
+							<span class="ingredient-name">{ item.Name }</span>
+							if len(item.Allergens) > 0 {
+								for _, a := range item.Allergens {
+									<span class="badge badge-allergen badge-sm">{ a }</span>
+								}
+							}
+						</li>
+					}
+				</ul>
+			</section>
+
+			<section class="steps">
+				<h2>Steps</h2>
+				<ol>
+					for _, step := range data.Steps {
+						<li class="step">
+							<div class="step-header">
+								<span class="step-number">Step { fmt.Sprintf("%d", step.Position) }</span>
+								if step.ActiveSeconds > 0 || step.PassiveSeconds > 0 {
+									<span class="step-time">
+										if step.ActiveSeconds > 0 {
+											<span>{ formatTime(step.ActiveSeconds) } active</span>
+										}
+										if step.PassiveSeconds > 0 {
+											<span>{ formatTime(step.PassiveSeconds) } passive</span>
+										}
+									</span>
+								}
+							</div>
+							if len(step.Components) > 0 {
+								<div class="step-components">
+									for _, comp := range step.Components {
+										<span class="component">
+											<span x-show="unitSystem === 'metric'">
+												{ formatQuantity(comp.Quantity) } { comp.Unit }
+											</span>
+											<span x-show="unitSystem === 'us'" style="display: none">
+												{ formatQuantity(comp.QuantityUS) } { comp.UnitUS }
+											</span>
+											{ comp.Name }
+											if comp.PreparationNote != "" {
+												<em>({ comp.PreparationNote })</em>
+											}
+											if comp.Optional {
+												<em>(optional)</em>
+											}
+											if comp.IsSubRecipe {
+												<span class="badge badge-sub">sub-recipe</span>
+											}
+										</span>
+									}
+								</div>
+							}
+							<p class="instruction">{ step.Instruction }</p>
+						</li>
+					}
+				</ol>
+			</section>
+
+			if data.Nutrition.Calories > 0 {
+				<section class="nutrition">
+					<h2>Nutrition (per serving)</h2>
+					<div class="nutrition-grid">
+						<div class="nutrient"><strong>Calories</strong> <span>{ fmt.Sprintf("%.0f kcal", data.Nutrition.Calories) }</span></div>
+						<div class="nutrient"><strong>Protein</strong> <span>{ fmt.Sprintf("%.1fg", data.Nutrition.ProteinG) }</span></div>
+						<div class="nutrient"><strong>Fat</strong> <span>{ fmt.Sprintf("%.1fg", data.Nutrition.FatG) }</span></div>
+						<div class="nutrient"><strong>Saturated Fat</strong> <span>{ fmt.Sprintf("%.1fg", data.Nutrition.SaturatedG) }</span></div>
+						<div class="nutrient"><strong>Carbs</strong> <span>{ fmt.Sprintf("%.1fg", data.Nutrition.CarbsG) }</span></div>
+						<div class="nutrient"><strong>Fiber</strong> <span>{ fmt.Sprintf("%.1fg", data.Nutrition.FiberG) }</span></div>
+						<div class="nutrient"><strong>Sugar</strong> <span>{ fmt.Sprintf("%.1fg", data.Nutrition.SugarG) }</span></div>
+						<div class="nutrient"><strong>Sodium</strong> <span>{ fmt.Sprintf("%.0fmg", data.Nutrition.SodiumMg) }</span></div>
+						<div class="nutrient"><strong>Cholesterol</strong> <span>{ fmt.Sprintf("%.0fmg", data.Nutrition.CholesterolMg) }</span></div>
+					</div>
+				</section>
+			}
+		</article>
+	}
+}
