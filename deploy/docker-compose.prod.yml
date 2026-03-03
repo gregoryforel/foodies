@@ -1,0 +1,72 @@
+# Production deployment for Hetzner VPS
+# Separate from docker-compose.yml (local dev)
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - web
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-recipe}:${POSTGRES_PASSWORD:-recipe}@postgres:5432/${POSTGRES_DB:-recipe_platform}?sslmode=disable
+      PORT: "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - web
+      - db
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    # No ports exposed — only accessible from the db network
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-recipe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-recipe_platform}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-recipe} -d ${POSTGRES_DB:-recipe_platform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - db
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  web:
+    driver: bridge
+  db:
+    driver: bridge
+    internal: true  # No external access — postgres is isolated

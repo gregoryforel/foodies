@@ -1,0 +1,41 @@
+{$DOMAIN::80} {
+	# Compression
+	encode gzip zstd
+
+	# Health check (no logging)
+	handle /health {
+		reverse_proxy app:8080
+	}
+
+	# Static assets — long cache, immutable
+	handle /static/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		reverse_proxy app:8080
+	}
+
+	# API — no cache
+	handle /api/* {
+		header Cache-Control "no-store, no-cache, must-revalidate"
+		reverse_proxy app:8080
+	}
+
+	# Everything else — short cache for HTML pages
+	handle {
+		header Cache-Control "public, max-age=60"
+		reverse_proxy app:8080
+	}
+
+	# Security headers
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Logging
+	log {
+		output stdout
+		format json
+	}
+}

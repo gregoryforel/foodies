@@ -1,0 +1,50 @@
+package templates
+
+import "fmt"
+
+type RecipeCardData struct {
+	Title              string
+	Slug               string
+	Description        string
+	TotalActiveMinutes int
+	TotalPassiveMinutes int
+	CaloriesPerServing float64
+	DietFlags          []string
+	Allergens          []string
+	Servings           int
+}
+
+templ RecipeCard(r RecipeCardData) {
+	<div class="recipe-card">
+		<a href={ templ.SafeURL("/recipes/" + r.Slug) }>
+			<h3>{ r.Title }</h3>
+		</a>
+		if r.Description != "" {
+			<p class="description">{ r.Description }</p>
+		}
+		<div class="recipe-meta">
+			<span class="time" title="Active time">{ fmt.Sprintf("%dm active", r.TotalActiveMinutes) }</span>
+			if r.TotalPassiveMinutes > 0 {
+				<span class="time" title="Passive time">{ fmt.Sprintf("%dm passive", r.TotalPassiveMinutes) }</span>
+			}
+			if r.CaloriesPerServing > 0 {
+				<span class="calories">{ fmt.Sprintf("%.0f kcal/serving", r.CaloriesPerServing) }</span>
+			}
+			<span class="servings">{ fmt.Sprintf("%d servings", r.Servings) }</span>
+		</div>
+		if len(r.DietFlags) > 0 {
+			<div class="badges diet-badges">
+				for _, flag := range r.DietFlags {
+					<span class="badge badge-diet">{ flag }</span>
+				}
+			</div>
+		}
+		if len(r.Allergens) > 0 {
+			<div class="badges allergen-badges">
+				for _, allergen := range r.Allergens {
+					<span class="badge badge-allergen">{ allergen }</span>
+				}
+			</div>
+		}
+	</div>
+}

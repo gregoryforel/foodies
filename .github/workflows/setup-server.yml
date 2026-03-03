@@ -1,0 +1,221 @@
+name: Setup Hetzner Server
+
+# Trigger manually from GitHub UI (works on phone!)
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get server info from Hetzner API
+        id: server
+        env:
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+        run: |
+          RESPONSE=$(curl -s -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            https://api.hetzner.cloud/v1/servers)
+
+          SERVER_IP=$(echo "$RESPONSE" | jq -r '.servers[0].public_net.ipv4.ip')
+          SERVER_ID=$(echo "$RESPONSE" | jq -r '.servers[0].id')
+          SERVER_NAME=$(echo "$RESPONSE" | jq -r '.servers[0].name')
+
+          if [ "$SERVER_IP" = "null" ] || [ -z "$SERVER_IP" ]; then
+            echo "ERROR: No servers found in Hetzner account"
+            echo "$RESPONSE" | jq .
+            exit 1
+          fi
+
+          echo "Found server: $SERVER_NAME (ID: $SERVER_ID, IP: $SERVER_IP)"
+          echo "server_ip=$SERVER_IP" >> "$GITHUB_OUTPUT"
+          echo "server_id=$SERVER_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Reset root password via Hetzner API
+        id: password
+        env:
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+          SERVER_ID: ${{ steps.server.outputs.server_id }}
+        run: |
+          echo "Resetting root password..."
+          HTTP_CODE=$(curl -s -o /tmp/reset_response.json -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.hetzner.cloud/v1/servers/$SERVER_ID/actions/reset_password")
+
+          if [ "$HTTP_CODE" != "201" ] && [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Password reset failed (HTTP $HTTP_CODE)"
+            cat /tmp/reset_response.json | jq .
+            echo ""
+            echo "This usually means the qemu-guest-agent isn't running."
+            echo "If this fails, add an SSH_PRIVATE_KEY secret instead."
+            exit 1
+          fi
+
+          ROOT_PASS=$(cat /tmp/reset_response.json | jq -r '.root_password')
+          echo "::add-mask::$ROOT_PASS"
+          echo "root_password=$ROOT_PASS" >> "$GITHUB_OUTPUT"
+          echo "Password reset successful."
+
+      - name: Wait for password reset to take effect
+        run: sleep 10
+
+      - name: Deploy to server via SSH
+        env:
+          SERVER_IP: ${{ steps.server.outputs.server_ip }}
+          ROOT_PASS: ${{ steps.password.outputs.root_password }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get install -y -qq sshpass
+
+          DOMAIN="${{ secrets.DOMAIN }}"
+          if [ -z "$DOMAIN" ]; then
+            DOMAIN="$SERVER_IP"
+          fi
+
+          # SSH options: skip host key check (first connection)
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
+
+          # Helper to run commands on the server
+          run_remote() {
+            sshpass -p "$ROOT_PASS" ssh $SSH_OPTS root@"$SERVER_IP" "$@"
+          }
+
+          echo "=== Testing SSH connection ==="
+          run_remote "echo 'Connected to server successfully!'"
+
+          echo ""
+          echo "=== Installing packages ==="
+          run_remote "export DEBIAN_FRONTEND=noninteractive && apt-get update -qq && apt-get install -y -qq ca-certificates curl gnupg git ufw openssl"
+
+          echo ""
+          echo "=== Installing Docker ==="
+          run_remote "
+            if command -v docker &>/dev/null; then
+              echo 'Docker already installed, skipping.'
+            else
+              install -m 0755 -d /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+              chmod a+r /etc/apt/keyrings/docker.asc
+              echo \"deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \$(. /etc/os-release && echo \$VERSION_CODENAME) stable\" > /etc/apt/sources.list.d/docker.list
+              apt-get update -qq
+              apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            fi
+            docker --version
+          "
+
+          echo ""
+          echo "=== Configuring firewall ==="
+          run_remote "
+            ufw allow 22/tcp
+            ufw allow 80/tcp
+            ufw allow 443/tcp
+            echo y | ufw enable || true
+            ufw status
+          "
+
+          echo ""
+          echo "=== Cloning repository ==="
+          run_remote "
+            if [ -d /srv/recipes/.git ]; then
+              echo 'Repo exists, pulling latest...'
+              cd /srv/recipes && git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git
+              git pull || true
+            else
+              rm -rf /srv/recipes
+              git clone https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git /srv/recipes
+            fi
+          "
+
+          echo ""
+          echo "=== Creating .env file ==="
+          run_remote "
+            cd /srv/recipes
+            if [ ! -f .env ]; then
+              echo 'DOMAIN=${DOMAIN}' > .env
+              echo 'POSTGRES_USER=recipe' >> .env
+              echo 'POSTGRES_PASSWORD=\$(openssl rand -base64 24)' >> .env
+              echo 'POSTGRES_DB=recipe_platform' >> .env
+              echo '.env created'
+            else
+              echo '.env already exists, keeping it'
+              # Update domain in case it changed
+              sed -i \"s|^DOMAIN=.*|DOMAIN=${DOMAIN}|\" .env
+            fi
+            cat .env
+          "
+
+          echo ""
+          echo "=== Starting containers ==="
+          run_remote "
+            cd /srv/recipes
+            docker compose -f deploy/docker-compose.prod.yml up -d --build
+          "
+
+          echo ""
+          echo "=== Waiting for containers to be ready ==="
+          sleep 20
+
+          echo ""
+          echo "=== Running migrations ==="
+          run_remote "
+            cd /srv/recipes
+            docker compose -f deploy/docker-compose.prod.yml exec -T app sh -c '
+              for f in /app/db/migrations/*_*.up.sql; do
+                echo \"Running: \$f\"
+                PGPASSWORD=\$POSTGRES_PASSWORD psql -h postgres -U \$POSTGRES_USER -d \$POSTGRES_DB -f \"\$f\" 2>&1 || true
+              done
+            '
+          "
+
+          echo ""
+          echo "=== Loading seed data ==="
+          run_remote "
+            cd /srv/recipes
+            docker compose -f deploy/docker-compose.prod.yml exec -T app sh -c '
+              for f in /app/db/seed/*.sql; do
+                echo \"Seeding: \$f\"
+                PGPASSWORD=\$POSTGRES_PASSWORD psql -h postgres -U \$POSTGRES_USER -d \$POSTGRES_DB -f \"\$f\" 2>&1 || true
+              done
+            '
+          "
+
+          echo ""
+          echo "=== Compiling recipes ==="
+          run_remote "
+            cd /srv/recipes
+            docker compose -f deploy/docker-compose.prod.yml exec -T app /app/server compile-recipes || true
+          "
+
+          echo ""
+          echo "=== Checking container status ==="
+          run_remote "cd /srv/recipes && docker compose -f deploy/docker-compose.prod.yml ps"
+
+      - name: Health check
+        env:
+          SERVER_IP: ${{ steps.server.outputs.server_ip }}
+        run: |
+          DOMAIN="${{ secrets.DOMAIN }}"
+          TARGET="${DOMAIN:-$SERVER_IP}"
+
+          echo "Checking http://$TARGET/health ..."
+          for i in $(seq 1 20); do
+            RESPONSE=$(curl -sk -o /dev/null -w "%{http_code}" "http://$TARGET/health" 2>/dev/null || true)
+            if [ "$RESPONSE" = "200" ]; then
+              echo ""
+              echo "=========================================="
+              echo "  DEPLOYMENT SUCCESSFUL!"
+              echo "  Your site is live at: http://$TARGET"
+              echo "=========================================="
+              exit 0
+            fi
+            echo "  Attempt $i/20 (HTTP $RESPONSE) — waiting..."
+            sleep 5
+          done
+
+          echo ""
+          echo "Health check didn't return 200 yet."
+          echo "The app may still be starting. Try: http://$TARGET"

@@ -1,0 +1,38 @@
+package templates
+
+type RecipeListData struct {
+	Recipes []RecipeCardData
+	Query   string
+}
+
+templ RecipeList(data RecipeListData) {
+	@Layout("Recipes") {
+		<h1>Recipes</h1>
+		<div class="search-bar">
+			<input
+				type="search"
+				name="q"
+				value={ data.Query }
+				hx-get="/recipes/partial/list"
+				hx-trigger="input changed delay:300ms"
+				hx-target="#recipe-list"
+				placeholder="Search recipes..."
+			/>
+		</div>
+		<div id="recipe-list">
+			@RecipeListPartial(data.Recipes)
+		</div>
+	}
+}
+
+templ RecipeListPartial(recipes []RecipeCardData) {
+	if len(recipes) == 0 {
+		<p class="no-results">No recipes found.</p>
+	} else {
+		<div class="recipe-grid">
+			for _, r := range recipes {
+				@RecipeCard(r)
+			}
+		</div>
+	}
+}
