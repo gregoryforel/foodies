@@ -67,6 +67,7 @@ jobs:
           SERVER_IP: ${{ steps.server.outputs.server_ip }}
           ROOT_PASS: ${{ steps.password.outputs.root_password }}
           REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sudo apt-get install -y -qq sshpass
 
@@ -121,10 +122,11 @@ jobs:
           run_remote "
             if [ -d /srv/recipes/.git ]; then
               echo 'Repo exists, pulling latest...'
-              cd /srv/recipes && git pull origin main || git pull
+              cd /srv/recipes && git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git
+              git pull || true
             else
               rm -rf /srv/recipes
-              git clone https://github.com/${REPO}.git /srv/recipes
+              git clone https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git /srv/recipes
             fi
           "
 
