@@ -22,7 +22,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/server ./cmd/server
 # Runtime stage
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates postgresql-client
+RUN apk add --no-cache ca-certificates postgresql-client curl
 
 WORKDIR /app
 
