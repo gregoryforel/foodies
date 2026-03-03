@@ -1,4 +1,4 @@
-{$DOMAIN:localhost} {
+{$DOMAIN::80} {
 	# Compression
 	encode gzip zstd
 

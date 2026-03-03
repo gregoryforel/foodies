@@ -1,0 +1,174 @@
+name: Setup Hetzner Server
+
+# Trigger manually from GitHub UI (works on phone!)
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get server IP from Hetzner API
+        id: server
+        env:
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+        run: |
+          # Get the first server's IP
+          RESPONSE=$(curl -s -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            https://api.hetzner.cloud/v1/servers)
+
+          SERVER_IP=$(echo "$RESPONSE" | jq -r '.servers[0].public_net.ipv4.ip')
+          SERVER_ID=$(echo "$RESPONSE" | jq -r '.servers[0].id')
+          SERVER_NAME=$(echo "$RESPONSE" | jq -r '.servers[0].name')
+
+          if [ "$SERVER_IP" = "null" ] || [ -z "$SERVER_IP" ]; then
+            echo "ERROR: No servers found in Hetzner account"
+            echo "$RESPONSE" | jq .
+            exit 1
+          fi
+
+          echo "Found server: $SERVER_NAME (ID: $SERVER_ID, IP: $SERVER_IP)"
+          echo "server_ip=$SERVER_IP" >> "$GITHUB_OUTPUT"
+          echo "server_id=$SERVER_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Rebuild server with cloud-init
+        env:
+          HETZNER_API_TOKEN: ${{ secrets.HETZNER_API_TOKEN }}
+          SERVER_ID: ${{ steps.server.outputs.server_id }}
+          SERVER_IP: ${{ steps.server.outputs.server_ip }}
+        run: |
+          DOMAIN="${{ secrets.DOMAIN }}"
+          # If no domain secret is set, use the server IP
+          if [ -z "$DOMAIN" ]; then
+            DOMAIN="$SERVER_IP"
+          fi
+
+          echo "Rebuilding server $SERVER_ID with cloud-init..."
+          echo "Domain/IP: $DOMAIN"
+
+          # Cloud-init user data
+          cat > /tmp/cloud-init.yml << 'CLOUDINIT'
+          #cloud-config
+          package_update: true
+          package_upgrade: true
+          packages:
+            - ca-certificates
+            - curl
+            - gnupg
+            - git
+            - ufw
+            - openssl
+
+          runcmd:
+            # Install Docker
+            - install -m 0755 -d /etc/apt/keyrings
+            - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            - chmod a+r /etc/apt/keyrings/docker.asc
+            - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+            - apt-get update -qq
+            - apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+            # Firewall
+            - ufw allow 22/tcp
+            - ufw allow 80/tcp
+            - ufw allow 443/tcp
+            - ufw --force enable
+
+            # Clone and deploy
+            - mkdir -p /srv/recipes
+            - git clone https://github.com/REPO_PLACEHOLDER /srv/recipes
+            - cd /srv/recipes && echo "DOMAIN=DOMAIN_PLACEHOLDER" > .env
+            - cd /srv/recipes && echo "POSTGRES_USER=recipe" >> .env
+            - cd /srv/recipes && echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
+            - cd /srv/recipes && echo "POSTGRES_DB=recipe_platform" >> .env
+            - cd /srv/recipes && docker compose -f deploy/docker-compose.prod.yml up -d --build
+
+            # Wait for app, then migrate + seed + compile
+            - sleep 30
+            - cd /srv/recipes && docker compose -f deploy/docker-compose.prod.yml exec -T app sh -c 'for f in /app/db/migrations/*_*.up.sql; do PGPASSWORD=$POSTGRES_PASSWORD psql -h postgres -U $POSTGRES_USER -d $POSTGRES_DB -f "$f" 2>&1 || true; done'
+            - cd /srv/recipes && docker compose -f deploy/docker-compose.prod.yml exec -T app sh -c 'for f in /app/db/seed/*.sql; do PGPASSWORD=$POSTGRES_PASSWORD psql -h postgres -U $POSTGRES_USER -d $POSTGRES_DB -f "$f" 2>&1 || true; done'
+            - cd /srv/recipes && docker compose -f deploy/docker-compose.prod.yml exec -T app /app/server compile-recipes || true
+          CLOUDINIT
+
+          # Replace placeholders
+          REPO="${{ github.repository }}"
+          sed -i "s|REPO_PLACEHOLDER|${REPO}.git|g" /tmp/cloud-init.yml
+          sed -i "s|DOMAIN_PLACEHOLDER|${DOMAIN}|g" /tmp/cloud-init.yml
+
+          cat /tmp/cloud-init.yml
+
+          # Rebuild the server via Hetzner API
+          USER_DATA=$(base64 -w 0 /tmp/cloud-init.yml)
+
+          HTTP_CODE=$(curl -s -o /tmp/rebuild_response.json -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"image\": \"ubuntu-24.04\", \"user_data\": \"$USER_DATA\"}" \
+            "https://api.hetzner.cloud/v1/servers/$SERVER_ID/rebuild")
+
+          echo "Hetzner API response (HTTP $HTTP_CODE):"
+          cat /tmp/rebuild_response.json | jq .
+
+          if [ "$HTTP_CODE" != "201" ] && [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Rebuild failed"
+            exit 1
+          fi
+
+          # Extract root password from rebuild response
+          ROOT_PASS=$(cat /tmp/rebuild_response.json | jq -r '.root_password // empty')
+          if [ -n "$ROOT_PASS" ]; then
+            echo "::notice::Root password has been reset. Check the workflow log."
+            echo "Root password: $ROOT_PASS"
+          fi
+
+          echo ""
+          echo "=========================================="
+          echo "  Server is rebuilding!"
+          echo "  IP: $SERVER_IP"
+          echo "  This takes ~5 minutes."
+          echo "=========================================="
+
+      - name: Wait for server to come back
+        env:
+          SERVER_IP: ${{ steps.server.outputs.server_ip }}
+        run: |
+          echo "Waiting for server to accept connections..."
+          for i in $(seq 1 60); do
+            if nc -z -w 2 "$SERVER_IP" 22 2>/dev/null; then
+              echo "Server is back online (SSH responding)!"
+              break
+            fi
+            echo "  Attempt $i/60 — waiting..."
+            sleep 10
+          done
+
+      - name: Wait for deployment to complete
+        env:
+          SERVER_IP: ${{ steps.server.outputs.server_ip }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+        run: |
+          TARGET="${DOMAIN:-$SERVER_IP}"
+          echo "Waiting for app health check at http://$TARGET/health ..."
+          echo "(cloud-init takes a few minutes to install Docker and build the app)"
+
+          for i in $(seq 1 60); do
+            RESPONSE=$(curl -sk -o /dev/null -w "%{http_code}" "http://$TARGET/health" 2>/dev/null || true)
+            if [ "$RESPONSE" = "200" ]; then
+              echo ""
+              echo "=========================================="
+              echo "  DEPLOYMENT SUCCESSFUL!"
+              echo "  Your site is live at: http://$TARGET"
+              echo "  Health check: http://$TARGET/health"
+              echo "=========================================="
+              exit 0
+            fi
+            echo "  Attempt $i/60 (HTTP $RESPONSE) — waiting..."
+            sleep 15
+          done
+
+          echo ""
+          echo "Health check didn't pass yet, but the server may still be building."
+          echo "Cloud-init can take up to 10 minutes. Check: http://$TARGET/health"
