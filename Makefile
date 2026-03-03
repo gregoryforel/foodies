@@ -1,4 +1,5 @@
-.PHONY: up down migrate seed sqlc templ test compile-recipes dev build clean
+.PHONY: up down migrate seed sqlc templ test compile-recipes dev build clean \
+       deploy-build deploy-up deploy-down deploy-logs deploy-ps
 
 DATABASE_URL ?= postgres://recipe:recipe@localhost:5432/recipe_platform?sslmode=disable
 
@@ -54,3 +55,21 @@ build: templ
 # Clean build artifacts
 clean:
 	rm -rf bin/ tmp/
+
+# ---- Production (deploy/docker-compose.prod.yml) ----
+PROD_COMPOSE = docker compose -f deploy/docker-compose.prod.yml
+
+deploy-build:
+	$(PROD_COMPOSE) build
+
+deploy-up:
+	$(PROD_COMPOSE) up -d
+
+deploy-down:
+	$(PROD_COMPOSE) down
+
+deploy-logs:
+	$(PROD_COMPOSE) logs -f
+
+deploy-ps:
+	$(PROD_COMPOSE) ps

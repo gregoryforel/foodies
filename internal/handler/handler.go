@@ -26,6 +26,7 @@ func New(db *pgxpool.Pool, logger *slog.Logger) *Handler {
 
 // RegisterRoutes sets up all routes on the given mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /health", h.HandleHealth)
 	mux.HandleFunc("GET /", h.HandleHome)
 	mux.HandleFunc("GET /recipes", h.HandleRecipeList)
 	mux.HandleFunc("GET /recipes/{slug}", h.HandleRecipeDetail)
@@ -37,6 +38,16 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Static files
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
+}
+
+// HandleHealth returns 200 if the app and database are reachable.
+func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	if err := h.DB.Ping(r.Context()); err != nil {
+		h.Logger.Error("health check failed", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unhealthy", "error": "database unreachable"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "healthy"})
 }
 
 // HandleHome renders the home page with featured recipes.
