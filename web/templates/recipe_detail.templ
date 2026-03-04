@@ -134,24 +134,35 @@ templ RecipeDetail(data RecipeDetailData) {
 
 			<section class="grocery-list">
 				<h2>Ingredients</h2>
-				<ul>
-					for _, item := range data.GroceryList {
-						<li>
-							<span class="ingredient-qty" x-show="unitSystem === 'metric'">{ formatQuantity(item.TotalQuantity) }</span>
-							<span class="ingredient-qty" x-show="unitSystem === 'us'" style="display: none">{ formatQuantity(item.QuantityUS) }</span>
-							<span class="ingredient-unit" x-show="unitSystem === 'metric'">{ item.Unit }</span>
-							<span class="ingredient-unit" x-show="unitSystem === 'us'" style="display: none">{ item.UnitUS }</span>
-							<span class="ingredient-main">
-								<span class="ingredient-name">{ item.Name }</span>
-								if len(item.Allergens) > 0 {
-									for _, a := range item.Allergens {
-										<span class="badge badge-allergen badge-sm">{ a }</span>
+				<table class="ingredients-table">
+					<colgroup>
+						<col class="ingredient-col-qty"/>
+						<col class="ingredient-col-unit"/>
+						<col class="ingredient-col-name"/>
+					</colgroup>
+					<tbody>
+						for _, item := range data.GroceryList {
+							<tr>
+								<td class="ingredient-qty">
+									<span class="ingredient-qty-value" x-show="unitSystem === 'metric'">{ formatQuantity(item.TotalQuantity) }</span>
+									<span class="ingredient-qty-value" x-show="unitSystem === 'us'" style="display: none">{ formatQuantity(item.QuantityUS) }</span>
+								</td>
+								<td class="ingredient-unit">
+									<span class="ingredient-unit-value" x-show="unitSystem === 'metric'">{ item.Unit }</span>
+									<span class="ingredient-unit-value" x-show="unitSystem === 'us'" style="display: none">{ item.UnitUS }</span>
+								</td>
+								<td class="ingredient-main">
+									<span class="ingredient-name">{ item.Name }</span>
+									if len(item.Allergens) > 0 {
+										for _, a := range item.Allergens {
+											<span class="badge badge-allergen badge-sm">{ a }</span>
+										}
 									}
-								}
-							</span>
-						</li>
-					}
-				</ul>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
 			</section>
 
 			<section class="steps">

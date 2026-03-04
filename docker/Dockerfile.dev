@@ -1,0 +1,18 @@
+FROM golang:1.25-alpine
+
+RUN apk add --no-cache git postgresql-client curl
+
+WORKDIR /app
+ENV PATH="/usr/local/go/bin:/go/bin:${PATH}"
+
+RUN go install github.com/a-h/templ/cmd/templ@latest \
+    && go install github.com/air-verse/air@latest
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+EXPOSE 8080
+
+ENTRYPOINT ["/bin/sh", "-c", "sed -i 's/\\r$//' /app/docker/entrypoint.dev.sh && chmod +x /app/docker/entrypoint.dev.sh && exec /app/docker/entrypoint.dev.sh"]

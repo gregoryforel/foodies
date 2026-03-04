@@ -1,5 +1,18 @@
 package templates
 
+import (
+	"os"
+	"strconv"
+)
+
+func styleSheetVersion() string {
+	info, err := os.Stat("web/static/style.css")
+	if err != nil {
+		return "1"
+	}
+	return strconv.FormatInt(info.ModTime().UnixNano(), 10)
+}
+
 templ Layout(title string) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -9,7 +22,7 @@ templ Layout(title string) {
 		<title>{ title } - Recipe Platform</title>
 		<script src="https://unpkg.com/htmx.org@2.0.4"></script>
 		<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-		<link rel="stylesheet" href="/static/style.css"/>
+		<link rel="stylesheet" href={ "/static/style.css?v=" + styleSheetVersion() }/>
 	</head>
 	<body>
 		<nav class="navbar">
@@ -31,3 +44,5 @@ templ Layout(title string) {
 	</body>
 	</html>
 }
+
+

@@ -37,7 +37,17 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/recipes/{slug}", h.HandleAPIRecipeDetail)
 
 	// Static files
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
+	staticFS := http.StripPrefix("/static/", http.FileServer(http.Dir("web/static")))
+	mux.Handle("GET /static/", noCache(staticFS))
+}
+
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // HandleHealth returns 200 if the process is alive.

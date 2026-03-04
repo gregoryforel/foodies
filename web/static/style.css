@@ -211,30 +211,62 @@ body {
 }
 
 /* Grocery List */
-.grocery-list ul {
-    list-style: none;
+.ingredients-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
 }
-.grocery-list-standalone {
-    list-style: none;
-}
-.grocery-list li,
-.grocery-list-standalone li {
-    padding: 0.5rem 0;
+.ingredients-table tr {
     border-bottom: 1px solid var(--color-border);
-    display: grid;
-    grid-template-columns: 6ch minmax(7ch, 11ch) 1fr;
-    align-items: baseline;
-    column-gap: 0.5rem;
+}
+.ingredients-table td {
+    padding: 0.5rem 0;
+    vertical-align: baseline;
+}
+.ingredient-col-qty {
+    width: 6ch;
+}
+.ingredient-col-unit {
+    width: 7ch;
 }
 .ingredient-qty,
 .ingredient-unit {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
-.ingredient-qty {
+.ingredients-table td.ingredient-qty {
     text-align: right;
+    padding-right: 0.5rem;
 }
-.ingredient-unit {
+.ingredient-qty-value {
+    display: flex;
+    width: 100%;
+    justify-content: flex-end;
+}
+.ingredients-table td.ingredient-qty > span {
+    display: flex;
+    width: 100%;
+    justify-content: flex-end;
+}
+.ingredients-table td.ingredient-unit {
     text-align: left;
+    padding-left: 0.25rem;
+    padding-right: 0.5rem;
+}
+.ingredient-unit-value {
+    display: block;
+    width: 100%;
+    text-align: left;
+}
+.ingredients-table td.ingredient-unit > span {
+    display: block;
+    width: 100%;
+    text-align: left;
+}
+.ingredients-table td.ingredient-main,
+.ingredients-table td.ingredient-name {
+    padding-left: 0.4rem;
 }
 .ingredient-main {
     display: flex;

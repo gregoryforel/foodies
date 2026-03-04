@@ -3,19 +3,26 @@ package templates
 templ GroceryListStandalone(items []GroceryItemData, unitSystem string) {
 	@Layout("Grocery List") {
 		<h1>Grocery List</h1>
-		<ul class="grocery-list-standalone">
-			for _, item := range items {
-				<li>
-					if unitSystem == "us" && item.UnitUS != "" {
-						<span class="ingredient-qty">{ formatQuantity(item.QuantityUS) }</span>
-						<span class="ingredient-unit">{ item.UnitUS }</span>
-					} else {
-						<span class="ingredient-qty">{ formatQuantity(item.TotalQuantity) }</span>
-						<span class="ingredient-unit">{ item.Unit }</span>
-					}
-					<span class="ingredient-name">{ item.Name }</span>
-				</li>
-			}
-		</ul>
+		<table class="ingredients-table ingredients-table-standalone">
+			<colgroup>
+				<col class="ingredient-col-qty"/>
+				<col class="ingredient-col-unit"/>
+				<col class="ingredient-col-name"/>
+			</colgroup>
+			<tbody>
+				for _, item := range items {
+					<tr>
+						if unitSystem == "us" && item.UnitUS != "" {
+							<td class="ingredient-qty">{ formatQuantity(item.QuantityUS) }</td>
+							<td class="ingredient-unit">{ item.UnitUS }</td>
+						} else {
+							<td class="ingredient-qty">{ formatQuantity(item.TotalQuantity) }</td>
+							<td class="ingredient-unit">{ item.Unit }</td>
+						}
+						<td class="ingredient-name">{ item.Name }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
 	}
 }
