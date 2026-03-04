@@ -7,9 +7,11 @@ templ GroceryListStandalone(items []GroceryItemData, unitSystem string) {
 			for _, item := range items {
 				<li>
 					if unitSystem == "us" && item.UnitUS != "" {
-						{ formatQuantity(item.QuantityUS) } { item.UnitUS }
+						<span class="ingredient-qty">{ formatQuantity(item.QuantityUS) }</span>
+						<span class="ingredient-unit">{ item.UnitUS }</span>
 					} else {
-						{ formatQuantity(item.TotalQuantity) } { item.Unit }
+						<span class="ingredient-qty">{ formatQuantity(item.TotalQuantity) }</span>
+						<span class="ingredient-unit">{ item.Unit }</span>
 					}
 					<span class="ingredient-name">{ item.Name }</span>
 				</li>

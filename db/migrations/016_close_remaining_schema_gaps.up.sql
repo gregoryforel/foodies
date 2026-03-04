@@ -30,6 +30,85 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Normalize legacy data before enforcing strict sub-recipe yield compatibility.
+-- Older data can have:
+-- 1) referenced sub-recipes with missing yield_amount / yield_unit_id
+-- 2) sub-recipe components whose unit differs from sub-recipe yield_unit_id
+DO $$
+DECLARE
+    v_conflict_count INT;
+BEGIN
+    -- Infer referenced sub-recipe unit from parent components.
+    WITH inferred AS (
+        SELECT
+            rsc.sub_recipe_id,
+            (array_agg(DISTINCT rsc.unit_id))[1] AS inferred_unit_id,
+            COUNT(DISTINCT rsc.unit_id) AS distinct_units
+        FROM recipe_step_components rsc
+        WHERE rsc.sub_recipe_id IS NOT NULL
+        GROUP BY rsc.sub_recipe_id
+    )
+    -- Detect ambiguous rows before any write.
+    SELECT COUNT(*)
+    INTO v_conflict_count
+    FROM recipes r
+    JOIN inferred i ON i.sub_recipe_id = r.id
+    WHERE r.yield_unit_id IS NULL
+      AND i.distinct_units <> 1;
+
+    IF v_conflict_count > 0 THEN
+        RAISE EXCEPTION
+            'Cannot infer yield_unit_id for % referenced sub-recipe(s): multiple units are used in parent components',
+            v_conflict_count;
+    END IF;
+
+    -- Backfill missing yield fields atomically to satisfy chk_recipes_yield_pair.
+    WITH inferred AS (
+        SELECT
+            rsc.sub_recipe_id,
+            (array_agg(DISTINCT rsc.unit_id))[1] AS inferred_unit_id,
+            COUNT(DISTINCT rsc.unit_id) AS distinct_units
+        FROM recipe_step_components rsc
+        WHERE rsc.sub_recipe_id IS NOT NULL
+        GROUP BY rsc.sub_recipe_id
+    )
+    UPDATE recipes r
+    SET
+        yield_amount = COALESCE(r.yield_amount, r.servings),
+        yield_unit_id = COALESCE(r.yield_unit_id, i.inferred_unit_id)
+    FROM inferred i
+    WHERE r.id = i.sub_recipe_id
+      AND (r.yield_amount IS NULL OR r.yield_unit_id IS NULL)
+      AND i.distinct_units = 1;
+
+    -- Any remaining referenced sub-recipes with missing yield fields are invalid.
+    SELECT COUNT(*)
+    INTO v_conflict_count
+    FROM recipes r
+    WHERE r.id IN (
+        SELECT DISTINCT sub_recipe_id
+        FROM recipe_step_components
+        WHERE sub_recipe_id IS NOT NULL
+    )
+      AND (r.yield_amount IS NULL OR r.yield_unit_id IS NULL);
+
+    IF v_conflict_count > 0 THEN
+        RAISE EXCEPTION
+            'Referenced sub-recipe yield metadata is incomplete for % recipe(s)',
+            v_conflict_count;
+    END IF;
+
+    -- Align component unit with sub-recipe yield unit for legacy mismatches.
+    UPDATE recipe_step_components rsc
+    SET unit_id = sr.yield_unit_id
+    FROM recipes sr
+    WHERE sr.id = rsc.sub_recipe_id
+      AND rsc.sub_recipe_id IS NOT NULL
+      AND sr.yield_unit_id IS NOT NULL
+      AND rsc.unit_id <> sr.yield_unit_id;
+END;
+$$;
+
 DROP TRIGGER IF EXISTS trg_enforce_subrecipe_unit_matches_yield ON recipe_step_components;
 
 CREATE TRIGGER trg_enforce_subrecipe_unit_matches_yield
