@@ -20,7 +20,7 @@ services:
       - web
 
   app:
-    image: ghcr.io/gregoryforel/foodies:latest
+    image: ghcr.io/gregoryforel/fondra:latest
     restart: unless-stopped
     expose:
       - "8080"

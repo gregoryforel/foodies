@@ -33,7 +33,7 @@ This installs Docker, creates a `deploy` user, configures UFW firewall, and crea
 ```bash
 ssh deploy@YOUR_SERVER_IP
 cd /srv/recipes
-git clone https://github.com/YOUR_ORG/foodies.git .
+git clone https://github.com/YOUR_ORG/fondra.git .
 ```
 
 ### 4. Create production .env

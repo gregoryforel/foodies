@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ALL-IN-ONE setup + deploy for Hetzner VPS.
-# Usage: ssh root@YOUR_IP 'bash -s' <<< "$(curl -fsSL https://raw.githubusercontent.com/gregoryforel/foodies/main/deploy/scripts/bootstrap.sh)"
+# Usage: ssh root@YOUR_IP 'bash -s' <<< "$(curl -fsSL https://raw.githubusercontent.com/gregoryforel/fondra/main/deploy/scripts/bootstrap.sh)"
 #
 # Or paste the whole thing into your SSH terminal.
 #
 # You MUST set these two variables before running:
 DOMAIN="${DOMAIN:?Set DOMAIN=your-domain.com before running}"
-REPO_URL="${REPO_URL:-https://github.com/gregoryforel/foodies.git}"
+REPO_URL="${REPO_URL:-https://github.com/gregoryforel/fondra.git}"
 DB_PASSWORD="$(openssl rand -base64 24)"
 
 set -euo pipefail
