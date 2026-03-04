@@ -465,17 +465,23 @@ func sumTiming(steps []CompiledStep) (int, int) {
 
 // quantityToGrams converts a grocery item's quantity to grams for nutrition calculation.
 // Mass units: convert to base (grams) via to_base_factor.
-// Volume units: convert to base (ml) via to_base_factor, then ml→g via density.
-// Count/other: skip (no reliable conversion).
+// Volume units: convert to base (ml) via to_base_factor, then ml->g via density.
+// Count units: convert via ingredient_portions.grams_per_unit when available.
+// Other dimensions: skip.
 func quantityToGrams(ctx context.Context, tx pgx.Tx, item GroceryItem) float64 {
 	var dimension string
 	var toBaseFactor float64
+	var gramsPerUnit *float64
 	err := tx.QueryRow(ctx, `
-		SELECT u.dimension, u.to_base_factor
-		FROM units u
-		JOIN ingredients i ON i.default_unit_id = u.id
-		WHERE i.id = $1
-	`, item.IngredientID).Scan(&dimension, &toBaseFactor)
+        SELECT u.dimension, u.to_base_factor, ip.grams_per_unit
+        FROM ingredients i
+        JOIN units u ON i.default_unit_id = u.id
+        LEFT JOIN ingredient_portions ip
+            ON ip.ingredient_id = i.id
+            AND ip.unit_id = i.default_unit_id
+            AND ip.description IS NULL
+        WHERE i.id = $1
+    `, item.IngredientID).Scan(&dimension, &toBaseFactor, &gramsPerUnit)
 	if err != nil {
 		// Fallback: assume grams if we can't determine the unit
 		return item.TotalQuantity
@@ -490,16 +496,21 @@ func quantityToGrams(ctx context.Context, tx pgx.Tx, item GroceryItem) float64 {
 		ml := item.TotalQuantity * toBaseFactor
 		var density float64
 		err := tx.QueryRow(ctx, `
-			SELECT density_g_per_ml FROM ingredient_densities
-			WHERE ingredient_id = $1 AND notes IS NULL
-		`, item.IngredientID).Scan(&density)
+            SELECT density_g_per_ml FROM ingredient_densities
+            WHERE ingredient_id = $1 AND notes IS NULL
+        `, item.IngredientID).Scan(&density)
 		if err != nil || density <= 0 {
 			// No density available; skip this ingredient for nutrition
 			return 0
 		}
 		return ml * density
+	case "count":
+		if gramsPerUnit == nil || *gramsPerUnit <= 0 {
+			return 0
+		}
+		return item.TotalQuantity * *gramsPerUnit
 	default:
-		// count, temperature, etc. — no reliable gram conversion
+		// temperature, length, etc. - no reliable gram conversion
 		return 0
 	}
 }
