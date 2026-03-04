@@ -181,7 +181,7 @@ jobs:
             docker compose -f deploy/docker-compose.prod.yml --env-file .env exec -T app sh -c '
               for f in /app/db/migrations/*_*.up.sql; do
                 echo \"Running: \$f\"
-                PGPASSWORD=\$POSTGRES_PASSWORD psql -h postgres -U \$POSTGRES_USER -d \$POSTGRES_DB -f \"\$f\" 2>&1 || true
+                psql \"\$DATABASE_URL\" -f \"\$f\" 2>&1 || true
               done
             '
           "
@@ -193,7 +193,7 @@ jobs:
             docker compose -f deploy/docker-compose.prod.yml --env-file .env exec -T app sh -c '
               for f in /app/db/seed/*.sql; do
                 echo \"Seeding: \$f\"
-                PGPASSWORD=\$POSTGRES_PASSWORD psql -h postgres -U \$POSTGRES_USER -d \$POSTGRES_DB -f \"\$f\" 2>&1 || true
+                psql \"\$DATABASE_URL\" -f \"\$f\" 2>&1 || true
               done
             '
           "
