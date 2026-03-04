@@ -89,6 +89,7 @@ jobs:
           ROOT_PASS: ${{ steps.password.outputs.root_password }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: |
           sudo apt-get install -y -qq sshpass
 
@@ -169,6 +170,10 @@ jobs:
             fi
             cat .env
           "
+
+          echo ""
+          echo "=== Logging into GHCR ==="
+          run_remote "echo '${GHCR_PAT}' | docker login ghcr.io -u gregoryforel --password-stdin"
 
           echo ""
           echo "=== Pulling and starting containers ==="

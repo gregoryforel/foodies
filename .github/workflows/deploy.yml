@@ -65,7 +65,11 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
+          envs: GHCR_PAT
           script: |
+            echo "$GHCR_PAT" | docker login ghcr.io -u gregoryforel --password-stdin
             cd /srv/recipes
             docker compose -f deploy/docker-compose.prod.yml --env-file .env pull app
             docker compose -f deploy/docker-compose.prod.yml --env-file .env up -d
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
