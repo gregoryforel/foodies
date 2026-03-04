@@ -70,8 +70,17 @@ jobs:
         env:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "\
+          SSH="ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          COMPOSE="docker compose -f deploy/docker-compose.prod.yml --env-file .env"
+
+          $SSH "\
             echo '${{ secrets.GHCR_PAT }}' | docker login ghcr.io -u gregoryforel --password-stdin && \
             cd /srv/recipes && \
-            docker compose -f deploy/docker-compose.prod.yml --env-file .env pull app && \
-            docker compose -f deploy/docker-compose.prod.yml --env-file .env up -d"
+            $COMPOSE pull app && \
+            $COMPOSE up -d && \
+            sleep 5 && \
+            $COMPOSE exec -T app sh -c '\
+              for f in /app/db/migrations/*_*.up.sql; do \
+                PGPASSWORD=\$POSTGRES_PASSWORD psql -h postgres -U \$POSTGRES_USER -d \$POSTGRES_DB -f \"\$f\" 2>&1 || true; \
+              done' && \
+            $COMPOSE exec -T app /app/server compile-recipes || true"
