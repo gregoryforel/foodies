@@ -2,6 +2,8 @@ package domain
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -31,6 +33,7 @@ type CompiledComponent struct {
 // GroceryItem represents a consolidated grocery list item.
 type GroceryItem struct {
 	IngredientID    string   `json:"ingredient_id"`
+	UnitID          string   `json:"unit_id"`
 	Name            string   `json:"name"`
 	TotalQuantity   float64  `json:"total_quantity"`
 	Unit            string   `json:"unit"`
@@ -84,7 +87,7 @@ func CompileRecipe(ctx context.Context, pool *pgxpool.Pool, recipeID string) err
 	}
 
 	// 4. Collect allergens
-	allergens, err := collectAllergens(ctx, tx, recipeID)
+	allergensContains, allergensMayContain, err := collectAllergens(ctx, tx, recipeID)
 	if err != nil {
 		return fmt.Errorf("collect allergens: %w", err)
 	}
@@ -113,16 +116,26 @@ func CompileRecipe(ctx context.Context, pool *pgxpool.Pool, recipeID string) err
 	groceryJSON, _ := json.Marshal(groceryList)
 	nutritionPerServingJSON, _ := json.Marshal(nutritionPerServing)
 	nutritionTotalJSON, _ := json.Marshal(nutritionTotal)
+	compileInputHash := calculateCompileInputHash(
+		stepsJSON,
+		groceryJSON,
+		nutritionPerServingJSON,
+		nutritionTotalJSON,
+		allergensContains,
+		allergensMayContain,
+		dietFlags,
+		tags,
+	)
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO compiled_recipes (
 			recipe_id, compiled_at, is_stale,
 			compiled_steps, compiled_grocery_list,
 			compiled_nutrition_per_serving, compiled_nutrition_total,
-			compiled_allergens, compiled_diet_flags,
+			compiled_allergens, compiled_allergens_contains, compiled_allergens_may_contain, compiled_diet_flags,
 			total_active_seconds, total_passive_seconds, total_calories_per_serving,
-			compiled_tags
-		) VALUES ($1, now(), false, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			compiled_tags, compile_input_hash
+		) VALUES ($1, now(), false, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		ON CONFLICT (recipe_id) DO UPDATE SET
 			compiled_at = now(),
 			is_stale = false,
@@ -131,16 +144,19 @@ func CompileRecipe(ctx context.Context, pool *pgxpool.Pool, recipeID string) err
 			compiled_nutrition_per_serving = EXCLUDED.compiled_nutrition_per_serving,
 			compiled_nutrition_total = EXCLUDED.compiled_nutrition_total,
 			compiled_allergens = EXCLUDED.compiled_allergens,
+			compiled_allergens_contains = EXCLUDED.compiled_allergens_contains,
+			compiled_allergens_may_contain = EXCLUDED.compiled_allergens_may_contain,
 			compiled_diet_flags = EXCLUDED.compiled_diet_flags,
 			total_active_seconds = EXCLUDED.total_active_seconds,
 			total_passive_seconds = EXCLUDED.total_passive_seconds,
 			total_calories_per_serving = EXCLUDED.total_calories_per_serving,
-			compiled_tags = EXCLUDED.compiled_tags
+			compiled_tags = EXCLUDED.compiled_tags,
+			compile_input_hash = EXCLUDED.compile_input_hash
 	`, recipeID, stepsJSON, groceryJSON,
 		nutritionPerServingJSON, nutritionTotalJSON,
-		allergens, dietFlags,
+		allergensContains, allergensContains, allergensMayContain, dietFlags,
 		totalActive, totalPassive, nutritionPerServing.Calories,
-		tags)
+		tags, compileInputHash)
 	if err != nil {
 		return fmt.Errorf("upsert compiled recipe: %w", err)
 	}
@@ -256,7 +272,13 @@ func resolveGroceryList(ctx context.Context, tx pgx.Tx, recipeID string) ([]Groc
 		normalized AS (
 			SELECT
 				rt.ingredient_id,
-				COALESCE(i.default_unit_id, rt.unit_id) AS unit_id,
+				CASE
+					WHEN rt.unit_id = COALESCE(i.default_unit_id, rt.unit_id) THEN COALESCE(i.default_unit_id, rt.unit_id)
+					WHEN su.dimension = du.dimension THEN COALESCE(i.default_unit_id, rt.unit_id)
+					WHEN su.dimension = 'volume' AND du.dimension = 'mass' AND id_dens.density_g_per_ml IS NOT NULL THEN COALESCE(i.default_unit_id, rt.unit_id)
+					WHEN su.dimension = 'mass' AND du.dimension = 'volume' AND id_dens.density_g_per_ml IS NOT NULL THEN COALESCE(i.default_unit_id, rt.unit_id)
+					ELSE rt.unit_id
+				END AS unit_id,
 				CASE
 					WHEN rt.unit_id = COALESCE(i.default_unit_id, rt.unit_id) THEN
 						rt.quantity * rt.multiplier
@@ -278,6 +300,7 @@ func resolveGroceryList(ctx context.Context, tx pgx.Tx, recipeID string) ([]Groc
 		)
 		SELECT
 			n.ingredient_id,
+			n.unit_id,
 			i.name,
 			u.name AS unit_name,
 			SUM(n.converted_quantity) AS total_quantity
@@ -295,7 +318,7 @@ func resolveGroceryList(ctx context.Context, tx pgx.Tx, recipeID string) ([]Groc
 	var items []GroceryItem
 	for rows.Next() {
 		var item GroceryItem
-		err := rows.Scan(&item.IngredientID, &item.Name, &item.Unit, &item.TotalQuantity)
+		err := rows.Scan(&item.IngredientID, &item.UnitID, &item.Name, &item.Unit, &item.TotalQuantity)
 		if err != nil {
 			return nil, err
 		}
@@ -330,7 +353,7 @@ func resolveGroceryList(ctx context.Context, tx pgx.Tx, recipeID string) ([]Groc
 	return items, nil
 }
 
-func collectAllergens(ctx context.Context, tx pgx.Tx, recipeID string) ([]string, error) {
+func collectAllergens(ctx context.Context, tx pgx.Tx, recipeID string) ([]string, []string, error) {
 	rows, err := tx.Query(ctx, `
 		WITH RECURSIVE recipe_tree AS (
 			SELECT rsc.ingredient_id, rsc.sub_recipe_id, 1.0::numeric AS multiplier, rsc.quantity
@@ -347,29 +370,40 @@ func collectAllergens(ctx context.Context, tx pgx.Tx, recipeID string) ([]string
 			JOIN recipe_step_components rsc ON rsc.step_id = rs.id
 			WHERE rt.sub_recipe_id IS NOT NULL
 		)
-		SELECT DISTINCT a.name
+		SELECT DISTINCT ia.severity, a.name
 		FROM recipe_tree rt
 		JOIN ingredient_allergens ia ON ia.ingredient_id = rt.ingredient_id
 		JOIN allergens a ON a.id = ia.allergen_id
-		WHERE rt.ingredient_id IS NOT NULL AND ia.severity = 'contains'
+		WHERE rt.ingredient_id IS NOT NULL
+		  AND ia.severity IN ('contains', 'may_contain')
+		ORDER BY ia.severity, a.name
 	`, recipeID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
 
-	var allergens []string
+	var contains []string
+	var mayContain []string
 	for rows.Next() {
+		var severity string
 		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
+		if err := rows.Scan(&severity, &name); err != nil {
+			return nil, nil, err
 		}
-		allergens = append(allergens, name)
+		if severity == "contains" {
+			contains = append(contains, name)
+		} else if severity == "may_contain" {
+			mayContain = append(mayContain, name)
+		}
 	}
-	if allergens == nil {
-		allergens = []string{}
+	if contains == nil {
+		contains = []string{}
 	}
-	return allergens, nil
+	if mayContain == nil {
+		mayContain = []string{}
+	}
+	return contains, mayContain, nil
 }
 
 func collectDietFlags(ctx context.Context, tx pgx.Tx, recipeID string) ([]string, error) {
@@ -464,6 +498,7 @@ func sumTiming(steps []CompiledStep) (int, int) {
 }
 
 // quantityToGrams converts a grocery item's quantity to grams for nutrition calculation.
+// It uses the grocery item's actual unit_id from compilation.
 // Mass units: convert to base (grams) via to_base_factor.
 // Volume units: convert to base (ml) via to_base_factor, then ml->g via density.
 // Count units: convert via ingredient_portions.grams_per_unit when available.
@@ -474,17 +509,16 @@ func quantityToGrams(ctx context.Context, tx pgx.Tx, item GroceryItem) float64 {
 	var gramsPerUnit *float64
 	err := tx.QueryRow(ctx, `
         SELECT u.dimension, u.to_base_factor, ip.grams_per_unit
-        FROM ingredients i
-        JOIN units u ON i.default_unit_id = u.id
+        FROM units u
         LEFT JOIN ingredient_portions ip
-            ON ip.ingredient_id = i.id
-            AND ip.unit_id = i.default_unit_id
+            ON ip.ingredient_id = $1
+            AND ip.unit_id = $2
             AND ip.description IS NULL
-        WHERE i.id = $1
-    `, item.IngredientID).Scan(&dimension, &toBaseFactor, &gramsPerUnit)
+        WHERE u.id = $2
+    `, item.IngredientID, item.UnitID).Scan(&dimension, &toBaseFactor, &gramsPerUnit)
 	if err != nil {
-		// Fallback: assume grams if we can't determine the unit
-		return item.TotalQuantity
+		// Unknown unit metadata: skip rather than guessing.
+		return 0
 	}
 
 	switch dimension {
@@ -587,6 +621,47 @@ func computeNutrition(ctx context.Context, tx pgx.Tx, groceryList []GroceryItem)
 	}
 
 	return nutrition
+}
+
+func calculateCompileInputHash(
+	stepsJSON []byte,
+	groceryJSON []byte,
+	nutritionPerServingJSON []byte,
+	nutritionTotalJSON []byte,
+	allergensContains []string,
+	allergensMayContain []string,
+	dietFlags []string,
+	tags []string,
+) string {
+	h := sha256.New()
+	h.Write(stepsJSON)
+	h.Write([]byte{0})
+	h.Write(groceryJSON)
+	h.Write([]byte{0})
+	h.Write(nutritionPerServingJSON)
+	h.Write([]byte{0})
+	h.Write(nutritionTotalJSON)
+	h.Write([]byte{0})
+	for _, v := range allergensContains {
+		h.Write([]byte(v))
+		h.Write([]byte{0})
+	}
+	h.Write([]byte{1})
+	for _, v := range allergensMayContain {
+		h.Write([]byte(v))
+		h.Write([]byte{0})
+	}
+	h.Write([]byte{1})
+	for _, v := range dietFlags {
+		h.Write([]byte(v))
+		h.Write([]byte{0})
+	}
+	h.Write([]byte{1})
+	for _, v := range tags {
+		h.Write([]byte(v))
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func scaleNutrition(total NutritionInfo, servings int) NutritionInfo {

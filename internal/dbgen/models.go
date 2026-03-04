@@ -16,6 +16,12 @@ type Allergen struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
+type AllergenTranslation struct {
+	AllergenID pgtype.UUID `json:"allergen_id"`
+	Locale     string      `json:"locale"`
+	Name       string      `json:"name"`
+}
+
 type AppUser struct {
 	ID                  pgtype.UUID        `json:"id"`
 	ExternalID          pgtype.Text        `json:"external_id"`
@@ -41,6 +47,10 @@ type CompiledRecipe struct {
 	TotalPassiveSeconds         int32              `json:"total_passive_seconds"`
 	TotalCaloriesPerServing     pgtype.Numeric     `json:"total_calories_per_serving"`
 	CompiledTags                []string           `json:"compiled_tags"`
+	CompiledFromRevisionID      pgtype.UUID        `json:"compiled_from_revision_id"`
+	CompiledAllergensContains   []string           `json:"compiled_allergens_contains"`
+	CompiledAllergensMayContain []string           `json:"compiled_allergens_may_contain"`
+	CompileInputHash            pgtype.Text        `json:"compile_input_hash"`
 }
 
 type DietFlag struct {
@@ -48,6 +58,12 @@ type DietFlag struct {
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type DietFlagTranslation struct {
+	DietFlagID pgtype.UUID `json:"diet_flag_id"`
+	Locale     string      `json:"locale"`
+	Name       string      `json:"name"`
 }
 
 type Ingredient struct {
@@ -91,6 +107,16 @@ type IngredientNutrient struct {
 	DataSource    pgtype.Text    `json:"data_source"`
 }
 
+type IngredientPortion struct {
+	ID           pgtype.UUID        `json:"id"`
+	IngredientID pgtype.UUID        `json:"ingredient_id"`
+	UnitID       pgtype.UUID        `json:"unit_id"`
+	GramsPerUnit pgtype.Numeric     `json:"grams_per_unit"`
+	Description  pgtype.Text        `json:"description"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type IngredientTranslation struct {
 	IngredientID pgtype.UUID `json:"ingredient_id"`
 	Locale       string      `json:"locale"`
@@ -118,6 +144,12 @@ type NutrientCategory struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type NutrientTranslation struct {
+	NutrientID pgtype.UUID `json:"nutrient_id"`
+	Locale     string      `json:"locale"`
+	Name       string      `json:"name"`
+}
+
 type Recipe struct {
 	ID           pgtype.UUID        `json:"id"`
 	AuthorID     pgtype.UUID        `json:"author_id"`
@@ -131,6 +163,29 @@ type Recipe struct {
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	YieldAmount  pgtype.Numeric     `json:"yield_amount"`
 	YieldUnitID  pgtype.UUID        `json:"yield_unit_id"`
+}
+
+type RecipeMedium struct {
+	ID        pgtype.UUID        `json:"id"`
+	RecipeID  pgtype.UUID        `json:"recipe_id"`
+	Url       string             `json:"url"`
+	Kind      string             `json:"kind"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type RecipeMembership struct {
+	RecipeID  pgtype.UUID        `json:"recipe_id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Role      string             `json:"role"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type RecipeRevision struct {
+	ID         pgtype.UUID        `json:"id"`
+	RecipeID   pgtype.UUID        `json:"recipe_id"`
+	RevisionNo int32              `json:"revision_no"`
+	CreatedBy  pgtype.UUID        `json:"created_by"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type RecipeStep struct {
@@ -166,6 +221,11 @@ type RecipeTranslation struct {
 	Description pgtype.Text `json:"description"`
 }
 
+type StepEquipment struct {
+	StepID        pgtype.UUID `json:"step_id"`
+	EquipmentName string      `json:"equipment_name"`
+}
+
 type StepTranslation struct {
 	StepID      pgtype.UUID `json:"step_id"`
 	Locale      string      `json:"locale"`
@@ -180,6 +240,12 @@ type Tag struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type TagTranslation struct {
+	TagID  pgtype.UUID `json:"tag_id"`
+	Locale string      `json:"locale"`
+	Name   string      `json:"name"`
+}
+
 type Unit struct {
 	ID           pgtype.UUID        `json:"id"`
 	Name         string             `json:"name"`
@@ -190,4 +256,11 @@ type Unit struct {
 	ToBaseOffset pgtype.Numeric     `json:"to_base_offset"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UnitTranslation struct {
+	UnitID     pgtype.UUID `json:"unit_id"`
+	Locale     string      `json:"locale"`
+	Name       string      `json:"name"`
+	NamePlural string      `json:"name_plural"`
 }

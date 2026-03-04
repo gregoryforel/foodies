@@ -39,7 +39,14 @@ WHERE rsc.step_id = $1
 ORDER BY rsc.position;
 
 -- name: GetCompiledRecipe :one
-SELECT cr.*, r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
+SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
+       cr.compiled_steps, cr.compiled_grocery_list,
+       cr.compiled_nutrition_per_serving, cr.compiled_nutrition_total,
+       cr.compiled_allergens, cr.compiled_diet_flags,
+       cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
+       cr.compiled_tags, cr.compiled_from_revision_id,
+       cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
 FROM compiled_recipes cr
@@ -47,7 +54,14 @@ JOIN recipes r ON r.id = cr.recipe_id
 WHERE cr.recipe_id = $1;
 
 -- name: GetCompiledRecipeBySlug :one
-SELECT cr.*, r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
+SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
+       cr.compiled_steps, cr.compiled_grocery_list,
+       cr.compiled_nutrition_per_serving, cr.compiled_nutrition_total,
+       cr.compiled_allergens, cr.compiled_diet_flags,
+       cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
+       cr.compiled_tags, cr.compiled_from_revision_id,
+       cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
 FROM compiled_recipes cr
@@ -55,7 +69,14 @@ JOIN recipes r ON r.id = cr.recipe_id
 WHERE r.slug = $1;
 
 -- name: ListCompiledRecipes :many
-SELECT cr.*, r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
+SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
+       cr.compiled_steps, cr.compiled_grocery_list,
+       cr.compiled_nutrition_per_serving, cr.compiled_nutrition_total,
+       cr.compiled_allergens, cr.compiled_diet_flags,
+       cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
+       cr.compiled_tags, cr.compiled_from_revision_id,
+       cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
 FROM compiled_recipes cr
@@ -65,7 +86,14 @@ ORDER BY r.created_at DESC
 LIMIT $1 OFFSET $2;
 
 -- name: SearchCompiledRecipes :many
-SELECT cr.*, r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
+SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
+       cr.compiled_steps, cr.compiled_grocery_list,
+       cr.compiled_nutrition_per_serving, cr.compiled_nutrition_total,
+       cr.compiled_allergens, cr.compiled_diet_flags,
+       cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
+       cr.compiled_tags, cr.compiled_from_revision_id,
+       cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
 FROM compiled_recipes cr
@@ -80,10 +108,10 @@ INSERT INTO compiled_recipes (
     recipe_id, compiled_at, is_stale,
     compiled_steps, compiled_grocery_list,
     compiled_nutrition_per_serving, compiled_nutrition_total,
-    compiled_allergens, compiled_diet_flags,
+    compiled_allergens, compiled_allergens_contains, compiled_allergens_may_contain, compiled_diet_flags,
     total_active_seconds, total_passive_seconds, total_calories_per_serving,
-    compiled_tags
-) VALUES ($1, now(), false, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    compiled_tags, compile_input_hash
+) VALUES ($1, now(), false, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 ON CONFLICT (recipe_id) DO UPDATE SET
     compiled_at = now(),
     is_stale = false,
@@ -92,11 +120,14 @@ ON CONFLICT (recipe_id) DO UPDATE SET
     compiled_nutrition_per_serving = EXCLUDED.compiled_nutrition_per_serving,
     compiled_nutrition_total = EXCLUDED.compiled_nutrition_total,
     compiled_allergens = EXCLUDED.compiled_allergens,
+    compiled_allergens_contains = EXCLUDED.compiled_allergens_contains,
+    compiled_allergens_may_contain = EXCLUDED.compiled_allergens_may_contain,
     compiled_diet_flags = EXCLUDED.compiled_diet_flags,
     total_active_seconds = EXCLUDED.total_active_seconds,
     total_passive_seconds = EXCLUDED.total_passive_seconds,
     total_calories_per_serving = EXCLUDED.total_calories_per_serving,
-    compiled_tags = EXCLUDED.compiled_tags;
+    compiled_tags = EXCLUDED.compiled_tags,
+    compile_input_hash = EXCLUDED.compile_input_hash;
 
 -- name: ResolveRecipeTree :many
 -- Resolves all leaf ingredients from a recipe's full sub-recipe tree
@@ -130,7 +161,13 @@ WITH RECURSIVE recipe_tree AS (
 normalized AS (
     SELECT
         rt.ingredient_id,
-        COALESCE(i.default_unit_id, rt.unit_id) AS unit_id,
+        CASE
+            WHEN rt.unit_id = COALESCE(i.default_unit_id, rt.unit_id) THEN COALESCE(i.default_unit_id, rt.unit_id)
+            WHEN su.dimension = du.dimension THEN COALESCE(i.default_unit_id, rt.unit_id)
+            WHEN su.dimension = 'volume' AND du.dimension = 'mass' AND id_dens.density_g_per_ml IS NOT NULL THEN COALESCE(i.default_unit_id, rt.unit_id)
+            WHEN su.dimension = 'mass' AND du.dimension = 'volume' AND id_dens.density_g_per_ml IS NOT NULL THEN COALESCE(i.default_unit_id, rt.unit_id)
+            ELSE rt.unit_id
+        END AS unit_id,
         CASE
             -- Same unit: no conversion needed
             WHEN rt.unit_id = COALESCE(i.default_unit_id, rt.unit_id) THEN
@@ -143,7 +180,7 @@ normalized AS (
                 rt.quantity * rt.multiplier * su.to_base_factor * id_dens.density_g_per_ml / NULLIF(du.to_base_factor, 0)
             WHEN su.dimension = 'mass' AND du.dimension = 'volume' AND id_dens.density_g_per_ml IS NOT NULL THEN
                 rt.quantity * rt.multiplier * su.to_base_factor / id_dens.density_g_per_ml / NULLIF(du.to_base_factor, 0)
-            -- Fallback: keep raw quantity (no conversion possible)
+            -- Unconvertible dimensions remain in their original unit_id.
             ELSE
                 rt.quantity * rt.multiplier
         END AS converted_quantity
