@@ -1,8 +1,18 @@
 -- Seed: demo user and recipes
 
+-- Idempotency: allow re-running this seed after partial failures.
+-- Remove the demo recipes and their dependent rows before inserting again.
+DELETE FROM recipes
+WHERE slug IN ('classic-puff-pastry', 'beef-wellington', 'simple-roast-chicken');
+
 -- Demo user
 INSERT INTO app_users (display_name, email, preferred_unit_system, preferred_locale)
-VALUES ('Demo Chef', 'demo@example.com', 'metric', 'en');
+VALUES ('Demo Chef', 'demo@example.com', 'metric', 'en')
+ON CONFLICT (email) DO UPDATE SET
+    display_name = EXCLUDED.display_name,
+    preferred_unit_system = EXCLUDED.preferred_unit_system,
+    preferred_locale = EXCLUDED.preferred_locale,
+    updated_at = now();
 
 -- ============================================================
 -- Recipe 1: Puff Pastry (base recipe, no sub-recipes)
