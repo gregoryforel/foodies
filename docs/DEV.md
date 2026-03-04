@@ -29,6 +29,8 @@ make dev
 # Visit http://localhost:8080
 ```
 
+In server mode, a background maintenance loop processes queued recipe closure rebuilds (`process_recipe_closure_rebuild_queue()`).
+
 ## Make Targets
 
 | Target | Description |

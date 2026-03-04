@@ -42,7 +42,22 @@ The compiled result is stored in `compiled_recipes` as structured JSONB plus ext
 
 ### Stale Cascade
 
-A database trigger (`mark_ancestors_stale`) fires on changes to `recipe_step_components`, `recipe_steps`, and `recipes(servings, yield_amount)`. It walks the DAG upward and sets `is_stale = true` on the changed recipe and all its ancestors in `compiled_recipes`. Use `CompileAllRecipes(ctx, pool, true)` to recompile only stale recipes.
+Staleness is propagated by statement-level triggers for recipe graph mutations and by additional triggers for ingredient/tag/taxonomy/unit changes that affect compiled payloads. Affected recipes are marked with `compiled_recipes.is_stale = true`, then recompiled via `CompileAllRecipes(ctx, pool, true)`.
+
+### Closure Maintenance
+
+`recipe_closure` is refreshed asynchronously. Graph mutations enqueue rebuild work in `recipe_closure_rebuild_queue`, and a server maintenance loop calls `process_recipe_closure_rebuild_queue()` periodically to rebuild closure data.
+
+### Authorization and Ownership
+
+Recipe sharing/collaboration is modeled with FK-backed tables:
+- `recipe_user_permissions`
+- `recipe_org_permissions`
+
+Ingredient libraries use FK-backed ownership columns in `ingredient_libraries`:
+- `scope` (`global`, `user`, `org`)
+- `user_id`
+- `organization_id`
 
 ### Unit System
 
@@ -61,6 +76,11 @@ Per-entity translation tables exist:
 - `recipe_translations` (recipe_id, locale, title, description)
 - `ingredient_translations` (ingredient_id, locale, name)
 - `step_translations` (step_id, locale, instruction)
+- `tag_translations` (tag_id, locale, name)
+- `allergen_translations` (allergen_id, locale, name)
+- `diet_flag_translations` (diet_flag_id, locale, name)
+- `nutrient_translations` (nutrient_id, locale, name)
+- `unit_translations` (unit_id, locale, name, name_plural)
 
 Currently English only. The old EAV `translations` table was replaced in migration 008.
 
