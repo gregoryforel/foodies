@@ -134,8 +134,8 @@ func CompileRecipe(ctx context.Context, pool *pgxpool.Pool, recipeID string) err
 			compiled_nutrition_per_serving, compiled_nutrition_total,
 			compiled_allergens, compiled_allergens_contains, compiled_allergens_may_contain, compiled_diet_flags,
 			total_active_seconds, total_passive_seconds, total_calories_per_serving,
-			compiled_tags, compile_input_hash
-		) VALUES ($1, now(), false, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			compiled_tags, compile_input_hash, compile_schema_version
+		) VALUES ($1, now(), false, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 1)
 		ON CONFLICT (recipe_id) DO UPDATE SET
 			compiled_at = now(),
 			is_stale = false,
@@ -151,7 +151,8 @@ func CompileRecipe(ctx context.Context, pool *pgxpool.Pool, recipeID string) err
 			total_passive_seconds = EXCLUDED.total_passive_seconds,
 			total_calories_per_serving = EXCLUDED.total_calories_per_serving,
 			compiled_tags = EXCLUDED.compiled_tags,
-			compile_input_hash = EXCLUDED.compile_input_hash
+			compile_input_hash = EXCLUDED.compile_input_hash,
+			compile_schema_version = EXCLUDED.compile_schema_version
 	`, recipeID, stepsJSON, groceryJSON,
 		nutritionPerServingJSON, nutritionTotalJSON,
 		allergensContains, allergensContains, allergensMayContain, dietFlags,
@@ -696,7 +697,13 @@ func scaleNutrition(total NutritionInfo, servings int) NutritionInfo {
 func CompileAllRecipes(ctx context.Context, pool *pgxpool.Pool, staleOnly bool) error {
 	var query string
 	if staleOnly {
-		query = "SELECT recipe_id FROM compiled_recipes WHERE is_stale = true ORDER BY compiled_at"
+		query = `
+			SELECT r.id
+			FROM recipes r
+			LEFT JOIN compiled_recipes cr ON cr.recipe_id = r.id
+			WHERE cr.recipe_id IS NULL OR cr.is_stale = true
+			ORDER BY COALESCE(cr.compiled_at, r.created_at)
+		`
 	} else {
 		query = "SELECT id FROM recipes ORDER BY created_at"
 	}

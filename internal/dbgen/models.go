@@ -51,6 +51,7 @@ type CompiledRecipe struct {
 	CompiledAllergensContains   []string           `json:"compiled_allergens_contains"`
 	CompiledAllergensMayContain []string           `json:"compiled_allergens_may_contain"`
 	CompileInputHash            pgtype.Text        `json:"compile_input_hash"`
+	CompileSchemaVersion        int32              `json:"compile_schema_version"`
 }
 
 type DietFlag struct {
@@ -100,6 +101,21 @@ type IngredientDietFlag struct {
 	Compatible   bool        `json:"compatible"`
 }
 
+type IngredientLibrary struct {
+	ID        pgtype.UUID        `json:"id"`
+	OwnerType string             `json:"owner_type"`
+	OwnerID   pgtype.UUID        `json:"owner_id"`
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IngredientLibraryItem struct {
+	LibraryID    pgtype.UUID        `json:"library_id"`
+	IngredientID pgtype.UUID        `json:"ingredient_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type IngredientNutrient struct {
 	IngredientID  pgtype.UUID    `json:"ingredient_id"`
 	NutrientID    pgtype.UUID    `json:"nutrient_id"`
@@ -117,10 +133,40 @@ type IngredientPortion struct {
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
+type IngredientPrice struct {
+	ID           pgtype.UUID        `json:"id"`
+	IngredientID pgtype.UUID        `json:"ingredient_id"`
+	ScopeType    string             `json:"scope_type"`
+	ScopeID      pgtype.UUID        `json:"scope_id"`
+	CurrencyCode string             `json:"currency_code"`
+	PricePerKg   pgtype.Numeric     `json:"price_per_kg"`
+	ObservedAt   pgtype.Timestamptz `json:"observed_at"`
+	Source       pgtype.Text        `json:"source"`
+}
+
 type IngredientTranslation struct {
 	IngredientID pgtype.UUID `json:"ingredient_id"`
 	Locale       string      `json:"locale"`
 	Name         string      `json:"name"`
+}
+
+type MealPlan struct {
+	ID        pgtype.UUID        `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Title     string             `json:"title"`
+	StartDate pgtype.Date        `json:"start_date"`
+	EndDate   pgtype.Date        `json:"end_date"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MealPlanItem struct {
+	ID          pgtype.UUID        `json:"id"`
+	MealPlanID  pgtype.UUID        `json:"meal_plan_id"`
+	RecipeID    pgtype.UUID        `json:"recipe_id"`
+	ScheduledAt pgtype.Timestamptz `json:"scheduled_at"`
+	MealType    pgtype.Text        `json:"meal_type"`
+	Servings    pgtype.Numeric     `json:"servings"`
 }
 
 type Nutrient struct {
@@ -150,6 +196,21 @@ type NutrientTranslation struct {
 	Name       string      `json:"name"`
 }
 
+type Organization struct {
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	Slug      string             `json:"slug"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OrganizationMember struct {
+	OrganizationID pgtype.UUID        `json:"organization_id"`
+	UserID         pgtype.UUID        `json:"user_id"`
+	Role           string             `json:"role"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
 type Recipe struct {
 	ID           pgtype.UUID        `json:"id"`
 	AuthorID     pgtype.UUID        `json:"author_id"`
@@ -163,6 +224,19 @@ type Recipe struct {
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	YieldAmount  pgtype.Numeric     `json:"yield_amount"`
 	YieldUnitID  pgtype.UUID        `json:"yield_unit_id"`
+}
+
+type RecipeClosure struct {
+	AncestorRecipeID   pgtype.UUID `json:"ancestor_recipe_id"`
+	DescendantRecipeID pgtype.UUID `json:"descendant_recipe_id"`
+	Depth              int32       `json:"depth"`
+}
+
+type RecipeFork struct {
+	ForkedRecipeID pgtype.UUID        `json:"forked_recipe_id"`
+	ParentRecipeID pgtype.UUID        `json:"parent_recipe_id"`
+	ForkedBy       pgtype.UUID        `json:"forked_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type RecipeMedium struct {
@@ -180,6 +254,23 @@ type RecipeMembership struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type RecipePermission struct {
+	RecipeID      pgtype.UUID        `json:"recipe_id"`
+	PrincipalType string             `json:"principal_type"`
+	PrincipalID   pgtype.UUID        `json:"principal_id"`
+	Role          string             `json:"role"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type RecipeReviewRating struct {
+	RecipeID   pgtype.UUID        `json:"recipe_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	Rating     int32              `json:"rating"`
+	ReviewText pgtype.Text        `json:"review_text"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type RecipeRevision struct {
 	ID         pgtype.UUID        `json:"id"`
 	RecipeID   pgtype.UUID        `json:"recipe_id"`
@@ -189,12 +280,14 @@ type RecipeRevision struct {
 }
 
 type RecipeStep struct {
-	ID             pgtype.UUID `json:"id"`
-	RecipeID       pgtype.UUID `json:"recipe_id"`
-	Position       int32       `json:"position"`
-	Instruction    string      `json:"instruction"`
-	ActiveSeconds  int32       `json:"active_seconds"`
-	PassiveSeconds int32       `json:"passive_seconds"`
+	ID              pgtype.UUID `json:"id"`
+	RecipeID        pgtype.UUID `json:"recipe_id"`
+	Position        int32       `json:"position"`
+	Instruction     string      `json:"instruction"`
+	ActiveSeconds   int32       `json:"active_seconds"`
+	PassiveSeconds  int32       `json:"passive_seconds"`
+	MakeAheadNote   pgtype.Text `json:"make_ahead_note"`
+	CanPrepareAhead bool        `json:"can_prepare_ahead"`
 }
 
 type RecipeStepComponent struct {
@@ -219,6 +312,30 @@ type RecipeTranslation struct {
 	Locale      string      `json:"locale"`
 	Title       string      `json:"title"`
 	Description pgtype.Text `json:"description"`
+}
+
+type ShoppingList struct {
+	ID        pgtype.UUID        `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Title     string             `json:"title"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ShoppingListItem struct {
+	ID             pgtype.UUID    `json:"id"`
+	ShoppingListID pgtype.UUID    `json:"shopping_list_id"`
+	IngredientID   pgtype.UUID    `json:"ingredient_id"`
+	Quantity       pgtype.Numeric `json:"quantity"`
+	UnitID         pgtype.UUID    `json:"unit_id"`
+	Checked        bool           `json:"checked"`
+	Note           pgtype.Text    `json:"note"`
+}
+
+type ShoppingListRecipeItem struct {
+	ShoppingListID pgtype.UUID    `json:"shopping_list_id"`
+	RecipeID       pgtype.UUID    `json:"recipe_id"`
+	Servings       pgtype.Numeric `json:"servings"`
 }
 
 type StepEquipment struct {

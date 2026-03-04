@@ -139,6 +139,7 @@ SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
        cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
        cr.compiled_tags, cr.compiled_from_revision_id,
        cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       cr.compile_schema_version,
        r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
@@ -165,6 +166,7 @@ type GetCompiledRecipeRow struct {
 	CompiledAllergensContains   []string           `json:"compiled_allergens_contains"`
 	CompiledAllergensMayContain []string           `json:"compiled_allergens_may_contain"`
 	CompileInputHash            pgtype.Text        `json:"compile_input_hash"`
+	CompileSchemaVersion        int32              `json:"compile_schema_version"`
 	Title                       string             `json:"title"`
 	Slug                        string             `json:"slug"`
 	Description                 pgtype.Text        `json:"description"`
@@ -199,6 +201,7 @@ func (q *Queries) GetCompiledRecipe(ctx context.Context, recipeID pgtype.UUID) (
 		&i.CompiledAllergensContains,
 		&i.CompiledAllergensMayContain,
 		&i.CompileInputHash,
+		&i.CompileSchemaVersion,
 		&i.Title,
 		&i.Slug,
 		&i.Description,
@@ -222,6 +225,7 @@ SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
        cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
        cr.compiled_tags, cr.compiled_from_revision_id,
        cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       cr.compile_schema_version,
        r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
@@ -248,6 +252,7 @@ type GetCompiledRecipeBySlugRow struct {
 	CompiledAllergensContains   []string           `json:"compiled_allergens_contains"`
 	CompiledAllergensMayContain []string           `json:"compiled_allergens_may_contain"`
 	CompileInputHash            pgtype.Text        `json:"compile_input_hash"`
+	CompileSchemaVersion        int32              `json:"compile_schema_version"`
 	Title                       string             `json:"title"`
 	Slug                        string             `json:"slug"`
 	Description                 pgtype.Text        `json:"description"`
@@ -282,6 +287,7 @@ func (q *Queries) GetCompiledRecipeBySlug(ctx context.Context, slug string) (Get
 		&i.CompiledAllergensContains,
 		&i.CompiledAllergensMayContain,
 		&i.CompileInputHash,
+		&i.CompileSchemaVersion,
 		&i.Title,
 		&i.Slug,
 		&i.Description,
@@ -377,6 +383,7 @@ SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
        cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
        cr.compiled_tags, cr.compiled_from_revision_id,
        cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       cr.compile_schema_version,
        r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
@@ -410,6 +417,7 @@ type ListCompiledRecipesRow struct {
 	CompiledAllergensContains   []string           `json:"compiled_allergens_contains"`
 	CompiledAllergensMayContain []string           `json:"compiled_allergens_may_contain"`
 	CompileInputHash            pgtype.Text        `json:"compile_input_hash"`
+	CompileSchemaVersion        int32              `json:"compile_schema_version"`
 	Title                       string             `json:"title"`
 	Slug                        string             `json:"slug"`
 	Description                 pgtype.Text        `json:"description"`
@@ -450,6 +458,7 @@ func (q *Queries) ListCompiledRecipes(ctx context.Context, arg ListCompiledRecip
 			&i.CompiledAllergensContains,
 			&i.CompiledAllergensMayContain,
 			&i.CompileInputHash,
+			&i.CompileSchemaVersion,
 			&i.Title,
 			&i.Slug,
 			&i.Description,
@@ -518,7 +527,7 @@ func (q *Queries) ListPublicRecipes(ctx context.Context, arg ListPublicRecipesPa
 }
 
 const listRecipeSteps = `-- name: ListRecipeSteps :many
-SELECT id, recipe_id, position, instruction, active_seconds, passive_seconds FROM recipe_steps
+SELECT id, recipe_id, position, instruction, active_seconds, passive_seconds, make_ahead_note, can_prepare_ahead FROM recipe_steps
 WHERE recipe_id = $1
 ORDER BY position
 `
@@ -539,6 +548,8 @@ func (q *Queries) ListRecipeSteps(ctx context.Context, recipeID pgtype.UUID) ([]
 			&i.Instruction,
 			&i.ActiveSeconds,
 			&i.PassiveSeconds,
+			&i.MakeAheadNote,
+			&i.CanPrepareAhead,
 		); err != nil {
 			return nil, err
 		}
@@ -584,9 +595,11 @@ func (q *Queries) ListRecipeTags(ctx context.Context, recipeID pgtype.UUID) ([]L
 }
 
 const listStaleRecipeIDs = `-- name: ListStaleRecipeIDs :many
-SELECT cr.recipe_id AS id FROM compiled_recipes cr
-WHERE cr.is_stale = true
-ORDER BY cr.compiled_at
+SELECT r.id
+FROM recipes r
+LEFT JOIN compiled_recipes cr ON cr.recipe_id = r.id
+WHERE cr.recipe_id IS NULL OR cr.is_stale = true
+ORDER BY COALESCE(cr.compiled_at, r.created_at)
 `
 
 func (q *Queries) ListStaleRecipeIDs(ctx context.Context) ([]pgtype.UUID, error) {
@@ -798,6 +811,7 @@ SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
        cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
        cr.compiled_tags, cr.compiled_from_revision_id,
        cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       cr.compile_schema_version,
        r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
@@ -832,6 +846,7 @@ type SearchCompiledRecipesRow struct {
 	CompiledAllergensContains   []string           `json:"compiled_allergens_contains"`
 	CompiledAllergensMayContain []string           `json:"compiled_allergens_may_contain"`
 	CompileInputHash            pgtype.Text        `json:"compile_input_hash"`
+	CompileSchemaVersion        int32              `json:"compile_schema_version"`
 	Title                       string             `json:"title"`
 	Slug                        string             `json:"slug"`
 	Description                 pgtype.Text        `json:"description"`
@@ -872,6 +887,7 @@ func (q *Queries) SearchCompiledRecipes(ctx context.Context, arg SearchCompiledR
 			&i.CompiledAllergensContains,
 			&i.CompiledAllergensMayContain,
 			&i.CompileInputHash,
+			&i.CompileSchemaVersion,
 			&i.Title,
 			&i.Slug,
 			&i.Description,
@@ -947,8 +963,8 @@ INSERT INTO compiled_recipes (
     compiled_nutrition_per_serving, compiled_nutrition_total,
     compiled_allergens, compiled_allergens_contains, compiled_allergens_may_contain, compiled_diet_flags,
     total_active_seconds, total_passive_seconds, total_calories_per_serving,
-    compiled_tags, compile_input_hash
-) VALUES ($1, now(), false, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    compiled_tags, compile_input_hash, compile_schema_version
+) VALUES ($1, now(), false, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 ON CONFLICT (recipe_id) DO UPDATE SET
     compiled_at = now(),
     is_stale = false,
@@ -964,7 +980,8 @@ ON CONFLICT (recipe_id) DO UPDATE SET
     total_passive_seconds = EXCLUDED.total_passive_seconds,
     total_calories_per_serving = EXCLUDED.total_calories_per_serving,
     compiled_tags = EXCLUDED.compiled_tags,
-    compile_input_hash = EXCLUDED.compile_input_hash
+    compile_input_hash = EXCLUDED.compile_input_hash,
+    compile_schema_version = EXCLUDED.compile_schema_version
 `
 
 type UpsertCompiledRecipeParams struct {
@@ -982,6 +999,7 @@ type UpsertCompiledRecipeParams struct {
 	TotalCaloriesPerServing     pgtype.Numeric `json:"total_calories_per_serving"`
 	CompiledTags                []string       `json:"compiled_tags"`
 	CompileInputHash            pgtype.Text    `json:"compile_input_hash"`
+	CompileSchemaVersion        int32          `json:"compile_schema_version"`
 }
 
 func (q *Queries) UpsertCompiledRecipe(ctx context.Context, arg UpsertCompiledRecipeParams) error {
@@ -1000,6 +1018,7 @@ func (q *Queries) UpsertCompiledRecipe(ctx context.Context, arg UpsertCompiledRe
 		arg.TotalCaloriesPerServing,
 		arg.CompiledTags,
 		arg.CompileInputHash,
+		arg.CompileSchemaVersion,
 	)
 	return err
 }

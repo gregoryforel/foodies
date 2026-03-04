@@ -46,6 +46,7 @@ SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
        cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
        cr.compiled_tags, cr.compiled_from_revision_id,
        cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       cr.compile_schema_version,
        r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
@@ -61,6 +62,7 @@ SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
        cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
        cr.compiled_tags, cr.compiled_from_revision_id,
        cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       cr.compile_schema_version,
        r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
@@ -76,6 +78,7 @@ SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
        cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
        cr.compiled_tags, cr.compiled_from_revision_id,
        cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       cr.compile_schema_version,
        r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
@@ -93,6 +96,7 @@ SELECT cr.recipe_id, cr.compiled_at, cr.is_stale,
        cr.total_active_seconds, cr.total_passive_seconds, cr.total_calories_per_serving,
        cr.compiled_tags, cr.compiled_from_revision_id,
        cr.compiled_allergens_contains, cr.compiled_allergens_may_contain, cr.compile_input_hash,
+       cr.compile_schema_version,
        r.title, r.slug, r.description, r.servings, r.yield_amount, r.yield_unit_id,
        r.source_locale, r.visibility,
        r.author_id, r.created_at AS recipe_created_at, r.updated_at AS recipe_updated_at
@@ -110,8 +114,8 @@ INSERT INTO compiled_recipes (
     compiled_nutrition_per_serving, compiled_nutrition_total,
     compiled_allergens, compiled_allergens_contains, compiled_allergens_may_contain, compiled_diet_flags,
     total_active_seconds, total_passive_seconds, total_calories_per_serving,
-    compiled_tags, compile_input_hash
-) VALUES ($1, now(), false, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    compiled_tags, compile_input_hash, compile_schema_version
+) VALUES ($1, now(), false, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 ON CONFLICT (recipe_id) DO UPDATE SET
     compiled_at = now(),
     is_stale = false,
@@ -127,7 +131,8 @@ ON CONFLICT (recipe_id) DO UPDATE SET
     total_passive_seconds = EXCLUDED.total_passive_seconds,
     total_calories_per_serving = EXCLUDED.total_calories_per_serving,
     compiled_tags = EXCLUDED.compiled_tags,
-    compile_input_hash = EXCLUDED.compile_input_hash;
+    compile_input_hash = EXCLUDED.compile_input_hash,
+    compile_schema_version = EXCLUDED.compile_schema_version;
 
 -- name: ResolveRecipeTree :many
 -- Resolves all leaf ingredients from a recipe's full sub-recipe tree
@@ -202,9 +207,11 @@ GROUP BY ingredient_id, unit_id;
 SELECT id FROM recipes ORDER BY created_at;
 
 -- name: ListStaleRecipeIDs :many
-SELECT cr.recipe_id AS id FROM compiled_recipes cr
-WHERE cr.is_stale = true
-ORDER BY cr.compiled_at;
+SELECT r.id
+FROM recipes r
+LEFT JOIN compiled_recipes cr ON cr.recipe_id = r.id
+WHERE cr.recipe_id IS NULL OR cr.is_stale = true
+ORDER BY COALESCE(cr.compiled_at, r.created_at);
 
 -- name: CollectRecipeAllergens :many
 -- Collects all allergens for a recipe by traversing sub-recipes.
