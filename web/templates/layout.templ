@@ -1,6 +1,7 @@
 package templates
 
 import (
+	"os"
 	"strconv"
 	"time"
 )
@@ -8,6 +9,10 @@ import (
 var cssVersion = strconv.FormatInt(time.Now().UnixNano(), 10)
 
 func styleSheetVersion() string { return cssVersion }
+
+func hotReloadEnabled() bool {
+	return os.Getenv("HOT_RELOAD") == "1"
+}
 
 templ Layout(title string) {
 	<!DOCTYPE html>
@@ -18,7 +23,33 @@ templ Layout(title string) {
 		<title>{ title } - Recipe Platform</title>
 		<script src="https://unpkg.com/htmx.org@2.0.4"></script>
 		<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-		<link rel="stylesheet" href={ "/static/style.css?v=" + styleSheetVersion() }/>
+		<link rel="stylesheet" href={ "/static/style.css?v=" + styleSheetVersion() } data-style-main="1"/>
+		if hotReloadEnabled() {
+			<script>
+				(function () {
+					const cssLink = document.querySelector('link[data-style-main="1"]');
+					if (!cssLink) return;
+					let lastModified = "";
+					async function refreshCSSIfChanged() {
+						try {
+							const resp = await fetch('/static/style.css', { method: 'HEAD', cache: 'no-store' });
+							const lm = resp.headers.get('last-modified') || "";
+							if (!lastModified) {
+								lastModified = lm;
+								return;
+							}
+							if (lm && lm !== lastModified) {
+								lastModified = lm;
+								const next = new URL(cssLink.href, window.location.origin);
+								next.searchParams.set('v', Date.now().toString());
+								cssLink.href = next.toString();
+							}
+						} catch (_) {}
+					}
+					setInterval(refreshCSSIfChanged, 1000);
+				})();
+			</script>
+		}
 	</head>
 	<body>
 		<nav class="navbar">

@@ -78,6 +78,10 @@ func formatQuantity(q float64) string {
 	return fmt.Sprintf("%.1f", q)
 }
 
+func shouldHideUnit(q float64, unit string) bool {
+	return q == 1 && (unit == "piece" || unit == "pieces")
+}
+
 templ RecipeDetail(data RecipeDetailData) {
 	@Layout(data.Title) {
 		<article class="recipe-detail" x-data={ fmt.Sprintf(`{ unitSystem: '%s' }`, data.UnitSystem) }>
@@ -148,8 +152,16 @@ templ RecipeDetail(data RecipeDetailData) {
 									<span class="ingredient-qty-value" x-show="unitSystem === 'us'" style="display: none">{ formatQuantity(item.QuantityUS) }</span>
 								</td>
 								<td class="ingredient-unit">
-									<span class="ingredient-unit-value" x-show="unitSystem === 'metric'">{ item.Unit }</span>
-									<span class="ingredient-unit-value" x-show="unitSystem === 'us'" style="display: none">{ item.UnitUS }</span>
+									<span class="ingredient-unit-value" x-show="unitSystem === 'metric'">
+										if !shouldHideUnit(item.TotalQuantity, item.Unit) {
+											{ item.Unit }
+										}
+									</span>
+									<span class="ingredient-unit-value" x-show="unitSystem === 'us'" style="display: none">
+										if !shouldHideUnit(item.QuantityUS, item.UnitUS) {
+											{ item.UnitUS }
+										}
+									</span>
 								</td>
 								<td class="ingredient-main">
 									<span class="ingredient-name">{ item.Name }</span>

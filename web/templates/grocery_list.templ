@@ -14,10 +14,18 @@ templ GroceryListStandalone(items []GroceryItemData, unitSystem string) {
 					<tr>
 						if unitSystem == "us" && item.UnitUS != "" {
 							<td class="ingredient-qty">{ formatQuantity(item.QuantityUS) }</td>
-							<td class="ingredient-unit">{ item.UnitUS }</td>
+							<td class="ingredient-unit">
+								if !shouldHideUnit(item.QuantityUS, item.UnitUS) {
+									{ item.UnitUS }
+								}
+							</td>
 						} else {
 							<td class="ingredient-qty">{ formatQuantity(item.TotalQuantity) }</td>
-							<td class="ingredient-unit">{ item.Unit }</td>
+							<td class="ingredient-unit">
+								if !shouldHideUnit(item.TotalQuantity, item.Unit) {
+									{ item.Unit }
+								}
+							</td>
 						}
 						<td class="ingredient-name">{ item.Name }</td>
 					</tr>

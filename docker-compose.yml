@@ -24,6 +24,7 @@ services:
     environment:
       DATABASE_URL: postgres://recipe:recipe@postgres:5432/recipe_platform?sslmode=disable
       PORT: "8080"
+      HOT_RELOAD: "1"
     volumes:
       - .:/app
       - go-mod-cache:/go/pkg/mod

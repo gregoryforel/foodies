@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"os"
 	"strconv"
 	"time"
 )
@@ -16,6 +17,10 @@ import (
 var cssVersion = strconv.FormatInt(time.Now().UnixNano(), 10)
 
 func styleSheetVersion() string { return cssVersion }
+
+func hotReloadEnabled() bool {
+	return os.Getenv("HOT_RELOAD") == "1"
+}
 
 func Layout(title string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -45,7 +50,7 @@ func Layout(title string) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 18, Col: 16}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 23, Col: 16}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -58,13 +63,23 @@ func Layout(title string) templ.Component {
 		var templ_7745c5c3_Var3 templ.SafeURL
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs("/static/style.css?v=" + styleSheetVersion())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 21, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/layout.templ`, Line: 26, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"></head><body><nav class=\"navbar\"><div class=\"container\"><a href=\"/\" class=\"logo\">Recipe Platform</a><div class=\"nav-links\"><a href=\"/recipes\">Recipes</a></div></div></nav><main class=\"container\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" data-style-main=\"1\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if hotReloadEnabled() {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<script>\n\t\t\t\t(function () {\n\t\t\t\t\tconst cssLink = document.querySelector('link[data-style-main=\"1\"]');\n\t\t\t\t\tif (!cssLink) return;\n\t\t\t\t\tlet lastModified = \"\";\n\t\t\t\t\tasync function refreshCSSIfChanged() {\n\t\t\t\t\t\ttry {\n\t\t\t\t\t\t\tconst resp = await fetch('/static/style.css', { method: 'HEAD', cache: 'no-store' });\n\t\t\t\t\t\t\tconst lm = resp.headers.get('last-modified') || \"\";\n\t\t\t\t\t\t\tif (!lastModified) {\n\t\t\t\t\t\t\t\tlastModified = lm;\n\t\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\tif (lm && lm !== lastModified) {\n\t\t\t\t\t\t\t\tlastModified = lm;\n\t\t\t\t\t\t\t\tconst next = new URL(cssLink.href, window.location.origin);\n\t\t\t\t\t\t\t\tnext.searchParams.set('v', Date.now().toString());\n\t\t\t\t\t\t\t\tcssLink.href = next.toString();\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t} catch (_) {}\n\t\t\t\t\t}\n\t\t\t\t\tsetInterval(refreshCSSIfChanged, 1000);\n\t\t\t\t})();\n\t\t\t</script>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</head><body><nav class=\"navbar\"><div class=\"container\"><a href=\"/\" class=\"logo\">Recipe Platform</a><div class=\"nav-links\"><a href=\"/recipes\">Recipes</a></div></div></nav><main class=\"container\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -72,7 +87,7 @@ func Layout(title string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</main><footer class=\"footer\"><div class=\"container\"><p>Recipe Platform — data-first, no-nonsense recipes.</p></div></footer></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</main><footer class=\"footer\"><div class=\"container\"><p>Recipe Platform — data-first, no-nonsense recipes.</p></div></footer></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
